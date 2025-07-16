@@ -1,0 +1,27 @@
+{
+  "canisters": {
+    "kosh_backend": {
+      "candid": "src/kosh_backend/kosh_backend.did",
+      "package": "kosh_backend",
+      "type": "rust"
+    },
+    "kosh_frontend": {
+      "dependencies": [
+        "kosh_backend"
+      ],
+      "source": [
+        "src/kosh_frontend/dist"
+      ],
+      "type": "assets",
+      "workspace": "kosh_frontend"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
