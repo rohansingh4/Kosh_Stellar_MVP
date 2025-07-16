@@ -15,6 +15,8 @@ export const useAuth = () => {
   const [principal, setPrincipal] = useState(null);
   const [actor, setActor] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [stellarAddress, setStellarAddress] = useState(null);
+  const [walletLoading, setWalletLoading] = useState(false);
 
   useEffect(() => {
     initializeAuth();
@@ -86,10 +88,71 @@ export const useAuth = () => {
       setIsAuthenticated(false);
       setPrincipal(null);
       setActor(null);
+      setStellarAddress(null);
     } catch (error) {
       console.error('Logout failed:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getStellarAddress = async () => {
+    if (!actor) throw new Error('Not authenticated');
+    
+    setWalletLoading(true);
+    try {
+      const result = await actor.public_key_stellar();
+      if (result.Ok) {
+        const address = result.Ok;
+        setStellarAddress({ stellar_address: address });
+        return { stellar_address: address };
+      } else {
+        throw new Error(result.Err);
+      }
+    } catch (error) {
+      console.error('Failed to get Stellar address:', error);
+      throw error;
+    } finally {
+      setWalletLoading(false);
+    }
+  };
+
+  const buildAndSubmitTransaction = async (destinationAddress, amount) => {
+    if (!actor) throw new Error('Not authenticated');
+    
+    try {
+      // Convert amount to u64 format (whole XLM units)
+      const amountU64 = BigInt(Math.floor(parseFloat(amount)));
+      
+      const result = await actor.build_stellar_transaction(destinationAddress, amountU64);
+      if (result.Ok) {
+        return {
+          success: true,
+          message: 'Transaction built, signed, and submitted successfully!',
+          details: result.Ok
+        };
+      } else {
+        throw new Error(result.Err);
+      }
+    } catch (error) {
+      console.error('Failed to build and submit transaction:', error);
+      throw error;
+    }
+  };
+
+  const getAccountBalance = async () => {
+    if (!actor) throw new Error('Not authenticated');
+    
+    try {
+      const result = await actor.get_account_balance();
+      if (result.Ok) {
+        return result.Ok;
+      } else {
+        throw new Error(result.Err);
+      }
+    } catch (error) {
+      console.error('Failed to get account balance:', error);
+      throw error;
     }
   };
 
@@ -98,7 +161,12 @@ export const useAuth = () => {
     principal,
     actor,
     loading,
+    walletLoading,
+    stellarAddress,
     login,
     logout,
+    getStellarAddress,
+    buildAndSubmitTransaction,
+    getAccountBalance,
   };
 }; 
