@@ -18,6 +18,24 @@ export const useAuth = () => {
   const [stellarAddress, setStellarAddress] = useState(null);
   const [walletLoading, setWalletLoading] = useState(false);
 
+  // Load cached address for the current user when authenticated
+  useEffect(() => {
+    if (principal) {
+      const cacheKey = `kosh_stellar_address_${principal.toString()}`;
+      const cachedAddress = localStorage.getItem(cacheKey);
+      if (cachedAddress) {
+        try {
+          const parsed = JSON.parse(cachedAddress);
+          setStellarAddress(parsed);
+          console.log('Loaded cached address for user:', principal.toString());
+        } catch (error) {
+          console.warn('Failed to parse cached address:', error);
+          localStorage.removeItem(cacheKey);
+        }
+      }
+    }
+  }, [principal]);
+
   useEffect(() => {
     initializeAuth();
   }, []);
@@ -42,6 +60,18 @@ export const useAuth = () => {
           },
         });
         setActor(authenticatedActor);
+        
+        // Auto-generate address if not cached for this user
+        const userPrincipal = identity.getPrincipal().toString();
+        const cacheKey = `kosh_stellar_address_${userPrincipal}`;
+        const cachedAddress = localStorage.getItem(cacheKey);
+        if (!cachedAddress) {
+          console.log('No cached address found for user, generating new address...');
+          // Use setTimeout to ensure actor is set
+          setTimeout(() => {
+            generateStellarAddressAuto(authenticatedActor, userPrincipal);
+          }, 100);
+        }
       }
     } catch (error) {
       console.error('Error initializing auth:', error);
@@ -70,6 +100,18 @@ export const useAuth = () => {
             },
           });
           setActor(authenticatedActor);
+          
+          // Auto-generate address if not cached for this user
+          const userPrincipal = identity.getPrincipal().toString();
+          const cacheKey = `kosh_stellar_address_${userPrincipal}`;
+          const cachedAddress = localStorage.getItem(cacheKey);
+          if (!cachedAddress) {
+            console.log('No cached address found for user, generating new address...');
+            // Use setTimeout to ensure actor is set
+            setTimeout(() => {
+              generateStellarAddressAuto(authenticatedActor, userPrincipal);
+            }, 100);
+          }
         },
       });
     } catch (error) {
@@ -85,6 +127,13 @@ export const useAuth = () => {
     try {
       setLoading(true);
       await authClient.logout();
+      
+      // Clear cached address for this user before clearing principal
+      if (principal) {
+        const cacheKey = `kosh_stellar_address_${principal.toString()}`;
+        localStorage.removeItem(cacheKey);
+      }
+      
       setIsAuthenticated(false);
       setPrincipal(null);
       setActor(null);
@@ -96,25 +145,65 @@ export const useAuth = () => {
     }
   };
 
-  const getStellarAddress = async () => {
-    if (!actor) throw new Error('Not authenticated');
+  const generateStellarAddressAuto = async (actorInstance = null, userPrincipal = null) => {
+    const currentActor = actorInstance || actor;
+    const currentPrincipal = userPrincipal || principal?.toString();
+    
+    if (!currentActor) {
+      console.warn('No actor available for address generation');
+      return;
+    }
+    
+    if (!currentPrincipal) {
+      console.warn('No principal available for address caching');
+      return;
+    }
     
     setWalletLoading(true);
     try {
-      const result = await actor.public_key_stellar();
+      console.log('Generating Stellar address...');
+      const result = await currentActor.public_key_stellar();
       if (result.Ok) {
         const address = result.Ok;
-        setStellarAddress({ stellar_address: address });
-        return { stellar_address: address };
+        const addressData = { stellar_address: address };
+        setStellarAddress(addressData);
+        
+        // Cache the address in localStorage with user-specific key
+        const cacheKey = `kosh_stellar_address_${currentPrincipal}`;
+        localStorage.setItem(cacheKey, JSON.stringify(addressData));
+        console.log('Address generated and cached for user:', currentPrincipal, address);
+        
+        return addressData;
       } else {
         throw new Error(result.Err);
       }
     } catch (error) {
-      console.error('Failed to get Stellar address:', error);
-      throw error;
+      console.error('Failed to generate Stellar address:', error);
     } finally {
       setWalletLoading(false);
     }
+  };
+
+  const getStellarAddress = async () => {
+    if (!actor) throw new Error('Not authenticated');
+    if (!principal) throw new Error('No principal available');
+    
+    // Check cache first
+    const cacheKey = `kosh_stellar_address_${principal.toString()}`;
+    const cachedAddress = localStorage.getItem(cacheKey);
+    if (cachedAddress) {
+      try {
+        const parsed = JSON.parse(cachedAddress);
+        setStellarAddress(parsed);
+        return parsed;
+      } catch (error) {
+        console.warn('Failed to parse cached address, regenerating...');
+        localStorage.removeItem(cacheKey);
+      }
+    }
+    
+    // Generate new address
+    return await generateStellarAddressAuto();
   };
 
   const buildAndSubmitTransaction = async (destinationAddress, amount) => {
