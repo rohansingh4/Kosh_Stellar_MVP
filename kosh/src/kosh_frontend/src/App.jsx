@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
 import { fetchXLMPrice, formatUsdValue, formatPercentChange } from './priceApi';
+import AIStakingCard from './components/AIStakingCard.jsx';
 
 function App() {
   const { 
@@ -30,7 +31,6 @@ function App() {
   // Modal State
   const [showSendModal, setShowSendModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
-  const [showRpcModal, setShowRpcModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   // Transaction State
@@ -41,6 +41,8 @@ function App() {
   const [transactionResult, setTransactionResult] = useState(null);
   const [transactionLoading, setTransactionLoading] = useState(false);
 
+  const [tooltip, setTooltip] = useState({ show: false, message: '', x: 0, y: 0 });
+
   // Auto-fetch balance when address becomes available
   useEffect(() => {
     if (stellarAddress && balanceVisible) {
@@ -48,136 +50,50 @@ function App() {
     }
   }, [stellarAddress]);
 
-  useEffect(() => {
-    if (stellarAddress && balanceVisible) {
-      handleCheckBalance();
-    }
-  }, [stellarAddress, balanceVisible]);
 
-  // Fetch price data when component mounts and when balance becomes visible
+
   useEffect(() => {
-    if (balanceVisible && !priceData && !priceLoading) {
-      fetchPriceData();
-    }
-  }, [balanceVisible]);
+    fetchPriceData();
+  }, []);
 
   const fetchPriceData = async () => {
-    setPriceLoading(true);
     try {
+      setPriceLoading(true);
       const data = await fetchXLMPrice();
       setPriceData(data);
-      console.log('Price data fetched from:', data.source);
     } catch (error) {
-      console.error('Failed to fetch price data:', error);
+      console.error('Error fetching price data:', error);
     } finally {
       setPriceLoading(false);
     }
   };
 
-  const handleGenerateAddress = async () => {
-    if (!actor) {
-      console.warn('Cannot generate address: not authenticated');
-      return;
-    }
-    
-    try {
-      const address = await getStellarAddress();
-      console.log('Successfully generated Stellar address:', address);
-    } catch (error) {
-      console.error('Failed to generate Stellar address:', error);
-      // Address section will show error state and retry button
-    }
+  const formatBalance = (balance) => {
+    if (!balance) return '0.00';
+    const numBalance = parseFloat(balance.replace(' XLM', '') || 0);
+    return numBalance.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
   };
 
   const handleCheckBalance = async () => {
-    if (!stellarAddress) return;
+    if (!stellarAddress) {
+      alert('No Stellar address available');
+      return;
+    }
 
     setBalanceLoading(true);
     try {
-      const balanceResult = await getAccountBalance();
+      const balanceResult = await getAccountBalance(stellarAddress.stellar_address);
       setBalance(balanceResult);
     } catch (error) {
-      console.error('Balance check error:', error);
+      console.error('Error checking balance:', error);
       setBalance('Error checking balance');
     } finally {
       setBalanceLoading(false);
     }
   };
-
-  const handleSendPayment = async () => {
-    if (!paymentForm.destination || !paymentForm.amount) {
-      alert('Please fill in destination address and amount');
-      return;
-    }
-
-    if (!stellarAddress) {
-      alert('Please generate your Stellar address first');
-      return;
-    }
-
-    setTransactionLoading(true);
-    setTransactionResult(null);
-
-    try {
-      const result = await buildAndSubmitTransaction(
-        paymentForm.destination,
-        paymentForm.amount
-      );
-
-      let transactionHash = '';
-      let transactionLink = '';
-      try {
-        const parsedResult = JSON.parse(result.details);
-        if (parsedResult.id) {
-          transactionHash = parsedResult.id;
-          transactionLink = `https://stellar.expert/explorer/testnet/tx/${transactionHash}`;
-        }
-      } catch (e) {
-        // If parsing fails, use the raw details
-      }
-
-      setTransactionResult({
-        success: result.success,
-        message: result.message,
-        details: result.details,
-        transactionHash,
-        transactionLink,
-        timestamp: new Date().toLocaleString()
-      });
-
-      // Clear form and close modal on success
-      if (result.success) {
-        setPaymentForm({ destination: '', amount: '' });
-        setShowSendModal(false);
-        // Refresh balance
-        setTimeout(() => {
-          if (balanceVisible) handleCheckBalance();
-        }, 2000);
-      }
-
-    } catch (error) {
-      console.error('Payment error:', error);
-      setTransactionResult({
-        success: false,
-        message: 'Transaction failed: ' + error.message,
-        timestamp: new Date().toLocaleString()
-      });
-    } finally {
-      setTransactionLoading(false);
-    }
-  };
-
-  const formatBalance = (balance) => {
-    if (!balance || balance === 'Error checking balance') return '****';
-    try {
-      const numBalance = parseFloat(balance.replace(' XLM', ''));
-      return numBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 7 });
-    } catch {
-      return '****';
-    }
-  };
-
-
 
   const networkOptions = [
     { value: 'stellar-testnet', label: 'Stellar Testnet', available: true },
@@ -193,12 +109,55 @@ function App() {
     
     if (!networkOption.available) {
       alert('Coming Soon! This network is not yet supported.');
-      // Reset to current network
       e.target.value = selectedNetwork;
       return;
     }
     
     setSelectedNetwork(newNetwork);
+  };
+
+  const handleSendTransaction = async () => {
+    if (!paymentForm.destination || !paymentForm.amount) {
+      alert('Please fill in all fields');
+      return;
+    }
+
+    setTransactionLoading(true);
+    try {
+      const result = await buildAndSubmitTransaction(paymentForm.destination, paymentForm.amount);
+      
+      if (result.success) {
+        setTransactionResult({
+          success: true,
+          message: result.message,
+          transactionHash: result.transactionHash,
+          transactionLink: `https://stellar.expert/explorer/testnet/tx/${result.transactionHash}`,
+          timestamp: new Date().toLocaleString()
+        });
+        setPaymentForm({ destination: '', amount: '' });
+        setShowSendModal(false);
+        
+        // Refresh balance after successful transaction
+        if (balanceVisible) {
+          setTimeout(handleCheckBalance, 2000);
+        }
+      } else {
+        setTransactionResult({
+          success: false,
+          message: result.message,
+          timestamp: new Date().toLocaleString()
+        });
+      }
+    } catch (error) {
+      console.error('Transaction error:', error);
+      setTransactionResult({
+        success: false,
+        message: `Transaction failed: ${error.message}`,
+        timestamp: new Date().toLocaleString()
+      });
+    } finally {
+      setTransactionLoading(false);
+    }
   };
 
   if (loading) {
@@ -271,280 +230,305 @@ function App() {
   }
 
   return (
-    <div className="wallet-container">
-      {/* Header */}
-      <header className="wallet-header">
-                 <div className="network-dropdown">
-           <select 
-             value={selectedNetwork} 
-             onChange={handleNetworkChange}
-             className="network-select"
-           >
-             {networkOptions.map(option => (
-               <option key={option.value} value={option.value}>
-                 {option.label}
-               </option>
-             ))}
-           </select>
-         </div>
-        
-        <div className="wallet-logo">
-          <h1 className="wallet-title">KOSH Wallet</h1>
-        </div>
-        
-        <div className="header-controls">
-          <button 
-            className="header-btn"
-            onClick={() => setShowRpcModal(true)}
-            title="RPC Settings"
-          >
-            🌍
-          </button>
-          <button 
-            className="header-btn"
-            onClick={() => setShowSettingsModal(true)}
-            title="Settings"
-          >
-            ☰
-          </button>
-        </div>
-             </header>
+    <>
+      {/* Background decorative elements */}
+      <div className="bg-decorations">
+        <div className="bg-glow"></div>
+        <div className="floating-orb primary"></div>
+        <div className="floating-orb secondary"></div>
+        <div className="floating-element purple-element" style={{ animationDelay: '0s' }}></div>
+        <div className="floating-element blue-element" style={{ animationDelay: '3s' }}></div>
+        <div className="floating-element teal-element" style={{ animationDelay: '1s' }}></div>
+        <div className="floating-element green-element" style={{ animationDelay: '4s' }}></div>
+        <div className="geometric-element square-element"></div>
+        <div className="geometric-element circle-element"></div>
+        <div className="geometric-element ring-element"></div>
+      </div>
 
-       {/* Stellar Address Section */}
-       <section className="address-section">
-         <div className="address-container">
-           <div className="address-info">
-             <span className="address-label">Your Stellar Address:</span>
-             <div className="address-value">
-               {walletLoading ? (
-                 <span className="address-loading">
-                   <div className="spinner-small"></div>
-                   Generating address...
-                 </span>
-               ) : stellarAddress ? (
-                 `${stellarAddress.stellar_address.substring(0, 8)}...${stellarAddress.stellar_address.substring(stellarAddress.stellar_address.length - 8)}`
-               ) : isAuthenticated && actor ? (
-                 <span className="address-loading">
-                   <div className="spinner-small"></div>
-                   Preparing wallet...
-                 </span>
-               ) : (
-                 <span className="address-error">
-                   Address not generated
-                   <button 
-                     className="retry-btn"
-                     onClick={handleGenerateAddress}
-                     title="Retry generating address"
-                   >
-                     🔄
-                   </button>
-                 </span>
-               )}
-             </div>
-           </div>
-           {stellarAddress && (
-             <button 
-               className="copy-btn"
-               onClick={() => {
-                 navigator.clipboard.writeText(stellarAddress.stellar_address);
-                 // Show brief feedback
-                 const btn = document.querySelector('.copy-btn');
-                 const originalText = btn.textContent;
-                 btn.textContent = '✓';
-                 setTimeout(() => {
-                   btn.textContent = originalText;
-                 }, 1000);
-               }}
-               title="Copy address"
-             >
-               📋
-             </button>
-           )}
-         </div>
-       </section>
-
-       {/* Balance Section */}
-      <section className="balance-section">
-        <div className="balance-container">
-          {balanceVisible ? (
-            <h2 className="balance-amount">
-              {balanceLoading ? (
-                <span className="loading"><div className="spinner"></div></span>
-              ) : (
-                `${formatBalance(balance)} XLM`
-              )}
-            </h2>
-          ) : (
-            <h2 className="balance-hidden">••••••••</h2>
-          )}
-          <button 
-            className="eye-btn"
-            onClick={() => setBalanceVisible(!balanceVisible)}
-            title={balanceVisible ? "Hide balance" : "Show balance"}
-          >
-            {balanceVisible ? '👁️' : '👁️‍🗨️'}
-          </button>
-          {balanceVisible && (
-            <button 
-              className="eye-btn"
-              onClick={fetchPriceData}
-              disabled={priceLoading}
-              title="Refresh price data"
-              style={{ marginLeft: '8px' }}
+      <div className="wallet-container">
+        {/* Header */}
+        <header className="wallet-header">
+          <div className="network-dropdown">
+            <select 
+              value={selectedNetwork} 
+              onChange={handleNetworkChange}
+              className="network-select"
             >
-              {priceLoading ? '⏳' : '🔄'}
+              {networkOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="wallet-title">
+            <h1>KOSH Wallet</h1>
+            <div className="wallet-logo">🌍</div>
+          </div>
+
+          <div className="header-controls">
+            <button className="header-btn" onClick={() => setShowSettingsModal(true)}>
+              ⚙️
             </button>
-          )}
-        </div>
-        
-        {balanceVisible && balance && balance !== 'Error checking balance' && (
-          <>
-            <div className="balance-usd">
-              {priceData ? (
-                `≈ $${formatUsdValue(parseFloat(balance.replace(' XLM', '') || 0), priceData.price)} USD`
-              ) : priceLoading ? (
-                'Loading price...'
+            <button className="header-btn menu-btn">
+              ☰
+            </button>
+          </div>
+        </header>
+
+        {/* Address Section */}
+        <section className="address-section">
+          <div className="address-card">
+            <h3 className="address-title">Your Stellar Address:</h3>
+            <div className="address-display">
+              {walletLoading ? (
+                <div className="loading">
+                  <div className="spinner"></div>
+                  Generating your address...
+                </div>
+              ) : stellarAddress ? (
+                <>
+                  <div className="address-text">{stellarAddress.stellar_address}</div>
+                  <button 
+                    className="copy-btn"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(stellarAddress.stellar_address);
+                        console.log('Address copied to clipboard');
+                      } catch (err) {
+                        console.error('Failed to copy address:', err);
+                      }
+                    }}
+                    title="Copy address"
+                  >
+                    📋
+                  </button>
+                </>
               ) : (
-                'Price unavailable'
+                <div className="address-error">
+                  Address not available. Please refresh.
+                </div>
               )}
             </div>
-            {priceData && (
-              <>
-                <div className={`balance-change ${priceData.change24h >= 0 ? 'positive' : 'negative'}`}>
-                  {formatPercentChange(priceData.change24h)} (24h)
+          </div>
+        </section>
+
+        {/* Balance Section */}
+        <section className="balance-section">
+          <div className="balance-card">
+            <div className="balance-container">
+              {balanceVisible ? (
+                <h2 className="balance-amount">
+                  {balanceLoading ? (
+                    <span className="loading"><div className="spinner"></div></span>
+                  ) : (
+                    <>
+                      {formatBalance(balance)}
+                      <span className="xlm-label">XLM</span>
+                    </>
+                  )}
+                </h2>
+              ) : (
+                <h2 className="balance-hidden">••••••••</h2>
+              )}
+              <button 
+                className="eye-btn"
+                onClick={() => setBalanceVisible(!balanceVisible)}
+                title={balanceVisible ? "Hide balance" : "Show balance"}
+              >
+                {balanceVisible ? '👁️' : '👁️‍🗨️'}
+              </button>
+            </div>
+            
+            {balanceVisible && balance && balance !== 'Error checking balance' && (
+              <div className="balance-usd">
+                ≈ $1,200.00 USD
+                <div className="balance-change positive">+2.34% (24h)</div>
+                <div style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))', marginTop: '8px', opacity: 0.7 }}>
+                  Data from Mock Data
                 </div>
-                {priceData.source !== 'CoinMarketCap' && (
-                  <div style={{ fontSize: '10px', color: '#999', marginTop: '4px' }}>
-                    Data from {priceData.source}
-                  </div>
-                )}
-              </>
+              </div>
             )}
-          </>
-        )}
-        
-        {balanceVisible && balance === 'Error checking balance' && (
-          <div className="balance-usd text-error">
-            Error loading balance
+
+            <div className="balance-particles">
+              <div className="particle"></div>
+              <div className="particle"></div>
+              <div className="particle"></div>
+              <div className="particle"></div>
+              <div className="particle"></div>
+            </div>
+          </div>
+        </section>
+
+        {/* AI Auto-Staking Section */}
+        <section className="mb-6">
+          <AIStakingCard />
+        </section>
+
+        {/* Action Buttons */}
+        <section className="action-buttons">
+          <div className="action-grid">
+            <div className="action-card" onClick={() => setShowSendModal(true)}>
+              <div className="action-hover-glow"></div>
+              <div className="action-content">
+                <div className="action-icon-wrapper send-gradient">
+                  <svg className="action-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m3 3 3 9-3 9 19-9Z"/>
+                    <path d="m6 12 13 0"/>
+                  </svg>
+                </div>
+                <span className="action-label">Send</span>
+              </div>
+              <div className="action-border-glow"></div>
+            </div>
+
+            <div className="action-card" onClick={() => setShowReceiveModal(true)}>
+              <div className="action-hover-glow"></div>
+              <div className="action-content">
+                <div className="action-icon-wrapper receive-gradient">
+                  <svg className="action-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 5v14"/>
+                    <path d="m19 12-7 7-7-7"/>
+                  </svg>
+                </div>
+                <span className="action-label">Receive</span>
+              </div>
+              <div className="action-border-glow"></div>
+            </div>
+
+            <div 
+              className="action-card" 
+              onClick={() => {
+                setTooltip({ 
+                  show: true, 
+                  message: 'Swap functionality coming soon!', 
+                  x: 0, 
+                  y: 0 
+                });
+                setTimeout(() => setTooltip({ show: false, message: '', x: 0, y: 0 }), 2000);
+              }}
+            >
+              <div className="action-hover-glow"></div>
+              <div className="action-content">
+                <div className="action-icon-wrapper swap-gradient">
+                  <svg className="action-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                    <path d="M21 3v5h-5"/>
+                    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                    <path d="M8 16H3v5"/>
+                  </svg>
+                </div>
+                <span className="action-label">Swap</span>
+              </div>
+              <div className="action-border-glow"></div>
+            </div>
+
+            <div 
+              className="action-card"
+              onClick={() => {
+                setTooltip({ 
+                  show: true, 
+                  message: 'Bridge functionality coming soon!', 
+                  x: 0, 
+                  y: 0 
+                });
+                setTimeout(() => setTooltip({ show: false, message: '', x: 0, y: 0 }), 2000);
+              }}
+            >
+              <div className="action-hover-glow"></div>
+              <div className="action-content">
+                <div className="action-icon-wrapper bridge-gradient">
+                  <svg className="action-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M8 3v3a2 2 0 0 1-2 2H3"/>
+                    <path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
+                    <path d="M3 16h3a2 2 0 0 1 2 2v3"/>
+                    <path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
+                  </svg>
+                </div>
+                <span className="action-label">Bridge</span>
+              </div>
+              <div className="action-border-glow"></div>
+            </div>
+          </div>
+        </section>
+
+        {/* Transaction Result */}
+        {transactionResult && (
+          <div className={`transaction-result ${transactionResult.success ? 'success' : 'error'}`}>
+            <h4>{transactionResult.success ? '✅ Transaction Successful' : '❌ Transaction Failed'}</h4>
+            <p><strong>Time:</strong> {transactionResult.timestamp}</p>
+            <p><strong>Message:</strong> {transactionResult.message}</p>
+            {transactionResult.transactionHash && (
+              <p>
+                <strong>Transaction:</strong>{' '}
+                <a 
+                  href={transactionResult.transactionLink} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="transaction-link"
+                >
+                  {transactionResult.transactionHash.substring(0, 16)}...
+                </a>
+              </p>
+            )}
           </div>
         )}
-      </section>
 
-      {/* AI Staking Section */}
-      <section className="staking-section">
-        <div className="staking-content">
-          <h3 className="staking-title">🤖 AI Auto-Staking</h3>
-          <p className="staking-subtitle">Automatic staking & yield optimization</p>
-          <div className="staking-animation"></div>
-          <div className="staking-return">7.2% APY</div>
-        </div>
-        <div className="coming-soon">Coming Soon</div>
-      </section>
-
-             {/* Action Buttons */}
-       <section className="action-buttons">
-         <button 
-           className="action-btn"
-           onClick={() => setShowSendModal(true)}
-         >
-           <span className="action-icon">📤</span>
-           <span className="action-label">Send</span>
-         </button>
-         
-         <button 
-           className="action-btn"
-           onClick={() => setShowReceiveModal(true)}
-         >
-           <span className="action-icon">📥</span>
-           <span className="action-label">Receive</span>
-         </button>
-         
-         <button 
-           className="action-btn"
-           onClick={() => alert('Swap functionality coming soon!')}
-         >
-           <span className="action-icon">🔄</span>
-           <span className="action-label">Swap</span>
-         </button>
-         
-         <button 
-           className="action-btn"
-           onClick={() => alert('Bridge functionality coming soon!')}
-         >
-           <span className="action-icon">🌉</span>
-           <span className="action-label">Bridge</span>
-         </button>
-       </section>
-
-      {/* Transaction Result */}
-      {transactionResult && (
-        <div className={`transaction-result ${transactionResult.success ? 'success' : 'error'}`}>
-          <h4>{transactionResult.success ? '✅ Transaction Successful' : '❌ Transaction Failed'}</h4>
-          <p><strong>Time:</strong> {transactionResult.timestamp}</p>
-          <p><strong>Message:</strong> {transactionResult.message}</p>
-          {transactionResult.transactionHash && (
-            <p>
-              <strong>Transaction:</strong>{' '}
-              <a 
-                href={transactionResult.transactionLink} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="transaction-link"
-              >
-                {transactionResult.transactionHash.substring(0, 16)}...
-              </a>
-            </p>
-          )}
-        </div>
-      )}
-
-             {/* Footer */}
-       <footer className="wallet-footer">
-         <div className="footer-signature">
-           Truly decentralized wallet powered by Threshold cryptography
-         </div>
-       </footer>
+        {/* Footer */}
+        <footer className="wallet-footer">
+          <p className="footer-text">
+            <span className="threshold-icon">🔐</span>
+            Truly decentralized wallet powered by Threshold cryptography
+          </p>
+        </footer>
+      </div>
 
       {/* Send Modal */}
       {showSendModal && (
         <div className="modal-overlay" onClick={() => setShowSendModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">Send XLM</h3>
-              <button className="close-btn" onClick={() => setShowSendModal(false)}>×</button>
+              <h3>Send XLM</h3>
+              <button onClick={() => setShowSendModal(false)} className="close-btn">×</button>
             </div>
             
             <div className="form-group">
-              <label className="form-label">Destination Address</label>
+              <label>Destination Address</label>
               <input
                 type="text"
-                className="form-input"
                 value={paymentForm.destination}
                 onChange={(e) => setPaymentForm({...paymentForm, destination: e.target.value})}
-                placeholder="GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                placeholder="GDXXXXX..."
+                className="form-input"
               />
             </div>
             
             <div className="form-group">
-              <label className="form-label">Amount (XLM)</label>
+              <label>Amount (XLM)</label>
               <input
                 type="number"
-                className="form-input"
-                step="1"
-                min="1"
                 value={paymentForm.amount}
                 onChange={(e) => setPaymentForm({...paymentForm, amount: e.target.value})}
-                placeholder="10"
+                placeholder="0.00"
+                className="form-input"
+                step="0.01"
+                min="0.01"
               />
             </div>
             
-            <button 
-              className="primary-btn"
-              onClick={handleSendPayment}
-              disabled={transactionLoading}
-            >
-              {transactionLoading ? 'Processing...' : 'Send Payment'}
-            </button>
+            <div className="modal-actions">
+              <button onClick={() => setShowSendModal(false)} className="secondary-btn">
+                Cancel
+              </button>
+              <button 
+                onClick={handleSendTransaction}
+                disabled={transactionLoading}
+                className="primary-btn"
+              >
+                {transactionLoading ? 'Sending...' : 'Send Transaction'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -552,66 +536,33 @@ function App() {
       {/* Receive Modal */}
       {showReceiveModal && (
         <div className="modal-overlay" onClick={() => setShowReceiveModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">Receive XLM</h3>
-              <button className="close-btn" onClick={() => setShowReceiveModal(false)}>×</button>
+              <h3>Receive XLM</h3>
+              <button onClick={() => setShowReceiveModal(false)} className="close-btn">×</button>
             </div>
             
-            {stellarAddress ? (
-              <div>
-                <p className="form-label">Your Stellar Address:</p>
-                <div className="address-display">
-                  {stellarAddress.stellar_address}
-                </div>
-                <div className="text-center mb-20">
-                  <p className="text-muted mb-12">Fund your testnet account:</p>
-                  <a 
-                    href={`https://friendbot.stellar.org/?addr=${stellarAddress.stellar_address}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="primary-btn"
-                    style={{ display: 'inline-block', width: 'auto', padding: '8px 16px', textDecoration: 'none' }}
-                  >
-                    Get 10,000 XLM from Friendbot
-                  </a>
-                </div>
+            <div className="receive-content">
+              <p>Share this address to receive XLM:</p>
+              <div className="address-display">
+                {stellarAddress?.stellar_address || 'Address not available'}
               </div>
-            ) : (
-              <div className="text-center">
-                <p className="text-muted mb-16">Generating your address...</p>
-                <div className="loading">
-                  <div className="spinner"></div>
-                  Please wait
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* RPC Settings Modal */}
-      {showRpcModal && (
-        <div className="modal-overlay" onClick={() => setShowRpcModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="modal-title">RPC Settings</h3>
-              <button className="close-btn" onClick={() => setShowRpcModal(false)}>×</button>
+              <button 
+                onClick={async () => {
+                  if (stellarAddress) {
+                    try {
+                      await navigator.clipboard.writeText(stellarAddress.stellar_address);
+                      alert('Address copied to clipboard!');
+                    } catch (err) {
+                      console.error('Failed to copy:', err);
+                    }
+                  }
+                }}
+                className="primary-btn"
+              >
+                Copy Address
+              </button>
             </div>
-            
-            <div className="form-group">
-              <label className="form-label">Stellar Horizon URL</label>
-              <input
-                type="text"
-                className="form-input"
-                defaultValue="https://horizon-testnet.stellar.org"
-                placeholder="https://horizon-testnet.stellar.org"
-              />
-            </div>
-            
-            <button className="primary-btn">
-              Save RPC Settings
-            </button>
           </div>
         </div>
       )}
@@ -619,10 +570,10 @@ function App() {
       {/* Settings Modal */}
       {showSettingsModal && (
         <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">Settings</h3>
-              <button className="close-btn" onClick={() => setShowSettingsModal(false)}>×</button>
+              <h3>Settings</h3>
+              <button onClick={() => setShowSettingsModal(false)} className="close-btn">×</button>
             </div>
             
             <div className="form-group">
@@ -653,7 +604,22 @@ function App() {
           </div>
         </div>
       )}
-    </div>
+
+      {/* Tooltip */}
+      {tooltip.show && (
+        <div 
+          className="global-tooltip"
+          style={{ 
+            top: '50%', 
+            left: '50%', 
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none'
+          }}
+        >
+          {tooltip.message}
+        </div>
+      )}
+    </>
   );
 }
 

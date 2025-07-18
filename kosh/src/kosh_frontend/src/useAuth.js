@@ -9,6 +9,22 @@ const CANISTER_IDS = {
   FRONTEND: 'u6s2n-gx777-77774-qaaba-cai'
 };
 
+// Detect if we're on the canister URL or localhost
+const getHost = () => {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname.includes('localhost') || hostname === '127.0.0.1') {
+      return 'http://localhost:4943';
+    } else {
+      // We're on the canister URL, use the same host
+      return window.location.origin;
+    }
+  }
+  return 'http://localhost:4943';
+};
+
+const HOST = getHost();
+
 export const useAuth = () => {
   const [authClient, setAuthClient] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -23,14 +39,31 @@ export const useAuth = () => {
     if (principal) {
       const cacheKey = `kosh_stellar_address_${principal.toString()}`;
       const cachedAddress = localStorage.getItem(cacheKey);
+      
+      // Also check old cache format as fallback (from yesterday)
+      const oldCacheKey = 'kosh_stellar_address';
+      const oldCachedAddress = localStorage.getItem(oldCacheKey);
+      
       if (cachedAddress) {
         try {
           const parsed = JSON.parse(cachedAddress);
           setStellarAddress(parsed);
-          console.log('Loaded cached address for user:', principal.toString());
+          console.log('Loaded cached address for user:', principal.toString(), parsed.stellar_address);
         } catch (error) {
           console.warn('Failed to parse cached address:', error);
           localStorage.removeItem(cacheKey);
+        }
+      } else if (oldCachedAddress) {
+        try {
+          const parsed = JSON.parse(oldCachedAddress);
+          setStellarAddress(parsed);
+          // Migrate to new format
+          localStorage.setItem(cacheKey, oldCachedAddress);
+          localStorage.removeItem(oldCacheKey);
+          console.log('Migrated old cached address for user:', principal.toString(), parsed.stellar_address);
+        } catch (error) {
+          console.warn('Failed to parse old cached address:', error);
+          localStorage.removeItem(oldCacheKey);
         }
       }
     }
@@ -56,7 +89,7 @@ export const useAuth = () => {
         const authenticatedActor = createActor(CANISTER_IDS.BACKEND, {
           agentOptions: {
             identity,
-            host: 'http://localhost:4943'
+            host: HOST
           },
         });
         setActor(authenticatedActor);
@@ -86,7 +119,9 @@ export const useAuth = () => {
     try {
       setLoading(true);
       await authClient.login({
-        identityProvider: `http://${CANISTER_IDS.INTERNET_IDENTITY}.localhost:4943`,
+        identityProvider: HOST.includes('localhost') 
+          ? `http://${CANISTER_IDS.INTERNET_IDENTITY}.localhost:4943`
+          : `${HOST}?canisterId=${CANISTER_IDS.INTERNET_IDENTITY}`,
         onSuccess: async () => {
           const identity = authClient.getIdentity();
           setPrincipal(identity.getPrincipal());
@@ -96,7 +131,7 @@ export const useAuth = () => {
           const authenticatedActor = createActor(CANISTER_IDS.BACKEND, {
             agentOptions: {
               identity,
-              host: 'http://localhost:4943'
+              host: HOST
             },
           });
           setActor(authenticatedActor);
@@ -161,7 +196,11 @@ export const useAuth = () => {
     
     setWalletLoading(true);
     try {
-      console.log('Generating Stellar address...');
+      console.log('Generating Stellar address...', {
+        host: HOST,
+        canisterId: CANISTER_IDS.BACKEND,
+        principal: currentPrincipal
+      });
       const result = await currentActor.public_key_stellar();
       if (result.Ok) {
         const address = result.Ok;
