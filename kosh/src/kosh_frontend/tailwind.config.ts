@@ -1,12 +1,12 @@
-/** @type {import('tailwindcss').Config} */
+import type { Config } from "tailwindcss";
+
 export default {
 	darkMode: ["class"],
 	content: [
-		"./pages/**/*.{js,jsx,ts,tsx}",
-		"./components/**/*.{js,jsx,ts,tsx}",
-		"./app/**/*.{js,jsx,ts,tsx}",
-		"./src/**/*.{js,jsx,ts,tsx}",
-		"./index.html",
+		"./pages/**/*.{ts,tsx}",
+		"./components/**/*.{ts,tsx}",
+		"./app/**/*.{ts,tsx}",
+		"./src/**/*.{ts,tsx}",
 	],
 	prefix: "",
 	theme: {
@@ -56,10 +56,22 @@ export default {
 					DEFAULT: 'hsl(var(--success))',
 					foreground: 'hsl(var(--success-foreground))'
 				},
-				'crypto-purple': 'hsl(var(--crypto-purple))',
-				'crypto-blue': 'hsl(var(--crypto-blue))',
-				'crypto-teal': 'hsl(var(--crypto-teal))',
-				'crypto-green': 'hsl(var(--crypto-green))'
+				crypto: {
+					purple: 'hsl(var(--crypto-purple))',
+					blue: 'hsl(var(--crypto-blue))',
+					teal: 'hsl(var(--crypto-teal))',
+					green: 'hsl(var(--crypto-green))'
+				},
+				sidebar: {
+					DEFAULT: 'hsl(var(--sidebar-background))',
+					foreground: 'hsl(var(--sidebar-foreground))',
+					primary: 'hsl(var(--sidebar-primary))',
+					'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
+					accent: 'hsl(var(--sidebar-accent))',
+					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
+					border: 'hsl(var(--sidebar-border))',
+					ring: 'hsl(var(--sidebar-ring))'
+				}
 			},
 			backgroundImage: {
 				'gradient-main': 'var(--gradient-main)',
@@ -132,5 +144,5 @@ export default {
 			}
 		}
 	},
-	plugins: [],
-}; 
+	plugins: [require("tailwindcss-animate")],
+} satisfies Config;

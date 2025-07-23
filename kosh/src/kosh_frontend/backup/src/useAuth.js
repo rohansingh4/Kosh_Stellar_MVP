@@ -295,8 +295,8 @@ export const useAuth = () => {
     }
   };
 
-  const getAccountBalance = async (address) => {
-    const addressToUse = address || stellarAddress?.stellar_address;
+  const getAccountBalance = async (stellarAddr = null) => {
+    const addressToUse = stellarAddr || stellarAddress?.stellar_address;
     
     if (!addressToUse) {
       throw new Error('No Stellar address available');

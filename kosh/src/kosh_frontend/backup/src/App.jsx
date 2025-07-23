@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
 import { fetchXLMPrice, formatUsdValue, formatPercentChange } from './priceApi';
-import AIStakingCard from './components/AIStakingCard.jsx';
 
 function App() {
   const { 
@@ -17,6 +16,18 @@ function App() {
     buildAndSubmitTransaction,
     getAccountBalance,
   } = useAuth();
+
+  // Debug information
+  useEffect(() => {
+    console.log('App state:', {
+      isAuthenticated,
+      principal: principal?.toString(),
+      actor: !!actor,
+      loading,
+      walletLoading,
+      stellarAddress
+    });
+  }, [isAuthenticated, principal, actor, loading, walletLoading, stellarAddress]);
 
   // UI State
   const [selectedNetwork, setSelectedNetwork] = useState('stellar-testnet');
@@ -49,8 +60,6 @@ function App() {
       handleCheckBalance();
     }
   }, [stellarAddress]);
-
-
 
   useEffect(() => {
     fetchPriceData();
@@ -268,10 +277,7 @@ function App() {
           </div>
 
           <div className="header-controls">
-            <button className="header-btn" onClick={() => setShowSettingsModal(true)}>
-              ⚙️
-            </button>
-            <button className="header-btn menu-btn">
+            <button className="header-btn menu-btn" onClick={() => setShowSettingsModal(true)}>
               ☰
             </button>
           </div>
@@ -288,26 +294,90 @@ function App() {
                   Generating your address...
                 </div>
               ) : stellarAddress ? (
-                <>
-                  <div className="address-text">{stellarAddress.stellar_address}</div>
-                  <button 
-                    className="copy-btn"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(stellarAddress.stellar_address);
-                        console.log('Address copied to clipboard');
-                      } catch (err) {
-                        console.error('Failed to copy address:', err);
-                      }
-                    }}
-                    title="Copy address"
-                  >
-                    📋
-                  </button>
-                </>
+                stellarAddress.error ? (
+                  <div className="address-error">
+                    <div>{stellarAddress.error}</div>
+                    <button 
+                      className="retry-btn"
+                      onClick={() => getStellarAddress()}
+                      style={{ 
+                        background: '#3b82f6', 
+                        color: 'white', 
+                        border: 'none', 
+                        padding: '8px 12px', 
+                        borderRadius: '6px', 
+                        cursor: 'pointer',
+                        marginTop: '8px',
+                        fontSize: '12px'
+                      }}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="address-text">{stellarAddress.stellar_address}</div>
+                    <button 
+                      className="copy-btn"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(stellarAddress.stellar_address);
+                          // Show success feedback
+                          const btn = document.querySelector('.copy-btn');
+                          const originalText = btn.innerHTML;
+                          btn.innerHTML = '✅';
+                          btn.style.background = 'rgba(34, 197, 94, 0.3)';
+                          setTimeout(() => {
+                            btn.innerHTML = originalText;
+                            btn.style.background = 'rgba(168, 85, 247, 0.2)';
+                          }, 1000);
+                          console.log('Address copied to clipboard');
+                        } catch (err) {
+                          console.error('Failed to copy address:', err);
+                          // Fallback for older browsers
+                          const textArea = document.createElement('textarea');
+                          textArea.value = stellarAddress.stellar_address;
+                          document.body.appendChild(textArea);
+                          textArea.select();
+                          document.execCommand('copy');
+                          document.body.removeChild(textArea);
+                          
+                          // Show success feedback
+                          const btn = document.querySelector('.copy-btn');
+                          const originalText = btn.innerHTML;
+                          btn.innerHTML = '✅';
+                          btn.style.background = 'rgba(34, 197, 94, 0.3)';
+                          setTimeout(() => {
+                            btn.innerHTML = originalText;
+                            btn.style.background = 'rgba(168, 85, 247, 0.2)';
+                          }, 1000);
+                        }
+                      }}
+                      title="Copy address"
+                    >
+                      📋
+                    </button>
+                  </>
+                )
               ) : (
                 <div className="address-error">
-                  Address not available. Please refresh.
+                  <div>Address not available. Please refresh or retry.</div>
+                  <button 
+                    className="retry-btn"
+                    onClick={() => getStellarAddress()}
+                    style={{ 
+                      background: '#3b82f6', 
+                      color: 'white', 
+                      border: 'none', 
+                      padding: '8px 12px', 
+                      borderRadius: '6px', 
+                      cursor: 'pointer',
+                      marginTop: '8px',
+                      fontSize: '12px'
+                    }}
+                  >
+                    Generate Address
+                  </button>
                 </div>
               )}
             </div>
@@ -332,21 +402,44 @@ function App() {
               ) : (
                 <h2 className="balance-hidden">••••••••</h2>
               )}
-              <button 
-                className="eye-btn"
-                onClick={() => setBalanceVisible(!balanceVisible)}
-                title={balanceVisible ? "Hide balance" : "Show balance"}
-              >
-                {balanceVisible ? '👁️' : '👁️‍🗨️'}
-              </button>
+              <div className="balance-controls">
+                <button 
+                  className="eye-btn"
+                  onClick={() => setBalanceVisible(!balanceVisible)}
+                  title={balanceVisible ? "Hide balance" : "Show balance"}
+                >
+                  {balanceVisible ? '👁️' : '👁️‍🗨️'}
+                </button>
+                <button 
+                  className="refresh-btn"
+                  onClick={handleCheckBalance}
+                  disabled={balanceLoading || !stellarAddress?.stellar_address}
+                  title="Refresh balance"
+                >
+                  🔄
+                </button>
+              </div>
             </div>
             
             {balanceVisible && balance && balance !== 'Error checking balance' && (
               <div className="balance-usd">
-                ≈ $1,200.00 USD
-                <div className="balance-change positive">+2.34% (24h)</div>
-                <div style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))', marginTop: '8px', opacity: 0.7 }}>
-                  Data from Mock Data
+                {priceLoading ? (
+                  <div>Loading price...</div>
+                ) : priceData ? (
+                  <>
+                    ≈ ${formatUsdValue(priceData.price, parseFloat(balance?.replace(' XLM', '') || 0))} USD
+                    <div className={`balance-change ${priceData.percent_change_24h >= 0 ? 'positive' : 'negative'}`}>
+                      {formatPercentChange(priceData.percent_change_24h)} (24h)
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    ≈ $0.00 USD
+                    <div className="balance-change neutral">Price unavailable</div>
+                  </>
+                )}
+                <div style={{ fontSize: '12px', color: '#a1a1aa', marginTop: '8px', opacity: 0.7 }}>
+                  Powered by CoinMarketCap
                 </div>
               </div>
             )}
@@ -359,11 +452,6 @@ function App() {
               <div className="particle"></div>
             </div>
           </div>
-        </section>
-
-        {/* AI Auto-Staking Section */}
-        <section className="mb-6">
-          <AIStakingCard />
         </section>
 
         {/* Action Buttons */}
@@ -499,8 +587,8 @@ function App() {
                 type="text"
                 value={paymentForm.destination}
                 onChange={(e) => setPaymentForm({...paymentForm, destination: e.target.value})}
-                placeholder="GDXXXXX..."
-                className="form-input"
+                placeholder="Enter Stellar address"
+                className="input-field"
               />
             </div>
             
@@ -511,9 +599,9 @@ function App() {
                 value={paymentForm.amount}
                 onChange={(e) => setPaymentForm({...paymentForm, amount: e.target.value})}
                 placeholder="0.00"
-                className="form-input"
-                step="0.01"
-                min="0.01"
+                className="input-field"
+                step="0.0000001"
+                min="0"
               />
             </div>
             
@@ -526,7 +614,7 @@ function App() {
                 disabled={transactionLoading}
                 className="primary-btn"
               >
-                {transactionLoading ? 'Sending...' : 'Send Transaction'}
+                {transactionLoading ? 'Sending...' : 'Send'}
               </button>
             </div>
           </div>

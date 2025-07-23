@@ -1,0 +1,154 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* KOSH Wallet Design System - Beautiful crypto wallet with AI staking animations */
+
+@layer base {
+  :root {
+    /* KOSH Teal Theme - Dark with teal accents */
+    --background: 220 30% 6%;
+    --foreground: 180 100% 95%;
+
+    --card: 220 25% 8%;
+    --card-foreground: 180 100% 95%;
+
+    --popover: 220 25% 8%;
+    --popover-foreground: 180 100% 95%;
+
+    --primary: 174 100% 41%;
+    --primary-foreground: 220 30% 6%;
+
+    --secondary: 220 20% 12%;
+    --secondary-foreground: 180 100% 95%;
+
+    --muted: 220 20% 12%;
+    --muted-foreground: 180 30% 70%;
+
+    --accent: 174 100% 41%;
+    --accent-foreground: 220 30% 6%;
+
+    --success: 174 100% 41%;
+    --success-foreground: 220 30% 6%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 180 100% 95%;
+
+    --border: 220 20% 15%;
+    --input: 220 20% 12%;
+    --ring: 174 100% 41%;
+
+    /* KOSH Crypto specific colors - all teal variants */
+    --crypto-purple: 174 100% 41%;
+    --crypto-blue: 174 100% 41%;
+    --crypto-teal: 174 100% 41%;
+    --crypto-green: 174 100% 41%;
+    
+    /* KOSH Teal Gradients */
+    --gradient-main: linear-gradient(135deg, hsl(220 30% 6%) 0%, hsl(174 100% 8%) 50%, hsl(220 30% 6%) 100%);
+    --gradient-card: linear-gradient(135deg, rgba(0,212,170,0.1) 0%, rgba(0,212,170,0.05) 100%);
+    --gradient-yield: linear-gradient(90deg, hsl(174 100% 41%) 0%, hsl(180 100% 50%) 100%);
+    --gradient-glow: radial-gradient(circle at center, hsl(174 100% 41% / 0.2) 0%, transparent 70%);
+    
+    /* KOSH Teal Shadows and effects */
+    --shadow-crypto: 0 10px 30px -10px hsl(174 100% 41% / 0.3);
+    --shadow-card: 0 8px 32px -8px hsl(174 100% 41% / 0.2);
+    --glow-primary: 0 0 40px hsl(174 100% 41% / 0.4);
+    
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    --radius: 1rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background: var(--gradient-main);
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  /* Background Gradients */
+  .bg-gradient-main {
+    background: var(--gradient-main);
+  }
+  
+  .bg-gradient-card {
+    background: var(--gradient-card);
+  }
+  
+  .bg-gradient-glow {
+    background: var(--gradient-glow);
+  }
+  
+  .bg-gradient-yield {
+    background: var(--gradient-yield);
+  }
+
+  /* Transitions */
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+}

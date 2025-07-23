@@ -1,18 +1,18 @@
-import { Card } from "./ui/card.jsx";
-import { Badge } from "./ui/badge.jsx";
-import { Progress } from "./ui/progress.jsx";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { Bot, Zap, TrendingUp } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const AIStakingCard = () => {
-  const [progress, setProgress] = useState(72);
+  const [progress, setProgress] = useState(18);
   const [isAnimating, setIsAnimating] = useState(true);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setProgress(prev => {
-        const newValue = prev + (Math.random() - 0.5) * 2;
-        return Math.max(70, Math.min(75, newValue));
+        const newValue = prev + (Math.random() - 0.5) * 0.3;
+        return Math.max(17.5, Math.min(18.5, newValue));
       });
     }, 2000);
 
@@ -109,4 +109,4 @@ const AIStakingCard = () => {
   );
 };
 
-export default AIStakingCard; 
+export default AIStakingCard;
