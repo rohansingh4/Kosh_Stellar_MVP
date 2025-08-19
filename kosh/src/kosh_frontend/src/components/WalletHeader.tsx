@@ -4,14 +4,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Settings, Globe, Menu, Copy, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import koshLogo from "@/assets/kosh-logo-final.png";
+import { copyToClipboard } from "@/lib/clipboard";
+// Using the new KOSH logo from public directory
 
 interface WalletHeaderProps {
   principal?: any;
   onLogout?: () => void;
+  selectedNetwork?: string;
+  onNetworkChange?: (network: string) => void;
 }
 
-const WalletHeader = ({ principal, onLogout }: WalletHeaderProps) => {
+const WalletHeader = ({ principal, onLogout, selectedNetwork = "stellar-testnet", onNetworkChange }: WalletHeaderProps) => {
   const [showSettings, setShowSettings] = useState(false);
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
@@ -20,17 +23,22 @@ const WalletHeader = ({ principal, onLogout }: WalletHeaderProps) => {
     if (!principal) return;
     
     try {
-      await navigator.clipboard.writeText(principal.toString());
-      setCopied(true);
-      toast({
-        title: "Principal copied!",
-        description: "Internet Identity principal copied to clipboard",
-      });
-      setTimeout(() => setCopied(false), 2000);
+      const success = await copyToClipboard(principal.toString());
+      
+      if (success) {
+        setCopied(true);
+        toast({
+          title: "Principal copied!",
+          description: "Internet Identity principal copied to clipboard",
+        });
+        setTimeout(() => setCopied(false), 2000);
+      } else {
+        throw new Error('Copy operation failed');
+      }
     } catch (err) {
       toast({
-        title: "Failed to copy",
-        description: "Could not copy principal to clipboard",
+        title: "Copy failed",
+        description: "Could not copy principal. Please copy manually from the settings.",
         variant: "destructive",
       });
     }
@@ -49,7 +57,19 @@ const WalletHeader = ({ principal, onLogout }: WalletHeaderProps) => {
         
         {/* Center: KOSH Brand */}
         <div className="flex items-center justify-center">
-          <img src={koshLogo} alt="KOSH" className="h-16 w-auto animate-float shadow-glow" />
+          <img 
+            src="/PHOTO-2025-07-20-01-21-31.jpg" 
+            alt="KOSH - The Keyless Holder Wallet" 
+            className="h-10 w-auto animate-float shadow-glow"
+            onError={(e) => {
+              // Fallback to text if image fails to load
+              const target = e.currentTarget as HTMLImageElement;
+              const fallback = document.createElement('div');
+              fallback.className = 'text-primary font-bold text-lg';
+              fallback.textContent = 'KOSH';
+              target.parentNode?.replaceChild(fallback, target);
+            }}
+          />
         </div>
         
         {/* Right: Settings */}
@@ -123,16 +143,18 @@ const WalletHeader = ({ principal, onLogout }: WalletHeaderProps) => {
       
       {/* Network Selector Row */}
       <div className="px-6 pb-2">
-        <Select defaultValue="stellar-testnet">
+        <Select value={selectedNetwork} onValueChange={onNetworkChange}>
           <SelectTrigger className="w-full bg-card/50 backdrop-blur-sm border-border/20 hover:bg-card/70 transition-smooth">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-success rounded-full animate-pulse-glow"></span>
+              <span className={`w-2 h-2 rounded-full animate-pulse-glow ${
+                selectedNetwork === "stellar-mainnet" ? "bg-crypto-blue" : "bg-success"
+              }`}></span>
               <SelectValue />
             </div>
           </SelectTrigger>
           <SelectContent className="bg-card/95 backdrop-blur-sm border-border/20">
             <SelectItem value="stellar-testnet">Stellar Testnet</SelectItem>
-            <SelectItem value="stellar-mainnet" disabled>Stellar Mainnet (Coming Soon)</SelectItem>
+            <SelectItem value="stellar-mainnet">Stellar Mainnet</SelectItem>
             <SelectItem value="ethereum" disabled>Ethereum (Coming Soon)</SelectItem>
             <SelectItem value="polygon" disabled>Polygon (Coming Soon)</SelectItem>
           </SelectContent>

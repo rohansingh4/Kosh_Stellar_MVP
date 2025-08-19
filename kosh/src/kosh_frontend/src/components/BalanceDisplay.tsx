@@ -12,6 +12,7 @@ interface BalanceDisplayProps {
   priceLoading?: boolean;
   formatUsdValue?: (price: number, amount: number) => string;
   formatPercentChange?: (change: number) => string;
+  selectedNetwork?: string;
 }
 
 const BalanceDisplay = ({ 
@@ -20,7 +21,8 @@ const BalanceDisplay = ({
   priceData, 
   priceLoading,
   formatUsdValue,
-  formatPercentChange 
+  formatPercentChange,
+  selectedNetwork 
 }: BalanceDisplayProps) => {
   const [isVisible, setIsVisible] = useState(true);
   const [balance, setBalance] = useState<string | null>(null);
@@ -57,25 +59,36 @@ const BalanceDisplay = ({
     }
   };
 
-  // Auto-fetch balance when address becomes available
+  // Auto-fetch balance when address becomes available or network changes
   useEffect(() => {
-    if (stellarAddress?.stellar_address && isVisible && !balance) {
+    if (stellarAddress?.stellar_address && isVisible) {
       handleRefreshBalance();
     }
-  }, [stellarAddress?.stellar_address, isVisible]);
+  }, [stellarAddress?.stellar_address, isVisible, selectedNetwork]);
+
+  // Auto-refresh removed as requested by user
 
   const formatBalance = (bal: string | null) => {
     if (!bal) return '0.00';
-    const numBalance = parseFloat(bal.replace(' XLM', '') || '0');
+    const balanceString = bal.replace(' XLM', '') || '0';
+    const numBalance = parseFloat(balanceString);
+    
+    // Handle NaN case
+    if (isNaN(numBalance)) return '0.00';
+    
+    // Always show exact balance with up to 7 decimal places but minimum 2
+    // Remove trailing zeros after decimal point, but keep at least 2 decimal places
     return numBalance.toLocaleString('en-US', {
       minimumFractionDigits: 2,
-      maximumFractionDigits: 7
+      maximumFractionDigits: 7,
+      useGrouping: true
     });
   };
 
   const getUsdValue = () => {
     if (!balance || !priceData || !formatUsdValue) return '$0.00';
     const numBalance = parseFloat(balance.replace(' XLM', '') || '0');
+    if (isNaN(numBalance)) return '$0.00';
     return '$' + formatUsdValue(priceData.price, numBalance);
   };
 
@@ -87,50 +100,57 @@ const BalanceDisplay = ({
   const isPositiveChange = priceData?.percent_change_24h >= 0;
 
   return (
-    <Card className="p-8 bg-gradient-card backdrop-blur-md border-border/20 shadow-crypto relative overflow-hidden">
+    <Card className="p-6 sm:p-8 bg-gradient-card backdrop-blur-md border-border/20 shadow-crypto relative overflow-hidden">
       {/* Animated background glow */}
       <div className="absolute inset-0 bg-gradient-glow opacity-30 animate-pulse-glow"></div>
       
       <div className="relative z-10 text-center space-y-4">
-        <div className="flex items-center justify-center gap-3">
-          <div className="text-5xl font-bold bg-gradient-to-r from-primary to-crypto-blue bg-clip-text text-transparent">
-            {balanceLoading ? (
-              <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
-            ) : isVisible ? (
-              <>
-                {formatBalance(balance)}
-                <span className="text-2xl ml-2 text-crypto-teal">XLM</span>
-              </>
-            ) : (
-              <>
-                ••••••
-                <span className="text-2xl ml-2 text-crypto-teal">XLM</span>
-              </>
-            )}
+        {/* Balance Section */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-center flex-wrap gap-2 min-h-[3.5rem]">
+            <div className="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-primary to-crypto-blue bg-clip-text text-transparent break-all text-center max-w-full">
+              {balanceLoading ? (
+                <div className="flex items-center justify-center gap-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : isVisible ? (
+                <div className="flex items-center justify-center flex-wrap gap-1">
+                  <span className="break-all">{formatBalance(balance)}</span>
+                  <span className="text-lg sm:text-xl lg:text-2xl text-crypto-teal">XLM</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-1">
+                  <span>••••••</span>
+                  <span className="text-lg sm:text-xl lg:text-2xl text-crypto-teal">XLM</span>
+                </div>
+              )}
+            </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsVisible(!isVisible)}
-            className="hover:bg-card/50 transition-smooth"
-          >
-            {isVisible ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleRefreshBalance}
-            disabled={balanceLoading || !stellarAddress?.stellar_address}
-            className="hover:bg-card/50 transition-smooth"
-          >
-            <RefreshCw className={`w-5 h-5 ${balanceLoading ? 'animate-spin' : 'hover:animate-spin'}`} />
-          </Button>
+          
+          {/* Action buttons */}
+          <div className="flex items-center justify-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsVisible(!isVisible)}
+              className="hover:bg-card/50 transition-smooth"
+            >
+              {isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleRefreshBalance}
+              disabled={balanceLoading || !stellarAddress?.stellar_address}
+              className="hover:bg-card/50 transition-smooth"
+            >
+              <RefreshCw className={`w-4 h-4 ${balanceLoading ? 'animate-spin' : 'hover:animate-spin'}`} />
+            </Button>
+          </div>
         </div>
         
         <div className="space-y-2">
-          <p className="text-xl text-muted-foreground">
+          <p className="text-lg sm:text-xl text-muted-foreground break-all text-center max-w-full">
             {priceLoading ? (
               'Loading price...'
             ) : (

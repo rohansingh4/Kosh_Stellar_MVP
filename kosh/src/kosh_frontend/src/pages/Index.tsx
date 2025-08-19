@@ -14,6 +14,8 @@ interface AuthData {
   getStellarAddress: () => Promise<any>;
   buildAndSubmitTransaction: (destination: string, amount: string) => Promise<any>;
   getAccountBalance: (address?: string) => Promise<string>;
+  selectedNetwork: string;
+  onNetworkChange: (network: string) => void;
 }
 
 interface PriceData {
@@ -42,6 +44,8 @@ const Index = ({ authData, priceData }: IndexProps) => {
         <WalletHeader 
           principal={authData.principal}
           onLogout={authData.logout}
+          selectedNetwork={authData.selectedNetwork}
+          onNetworkChange={authData.onNetworkChange}
         />
         
         <div className="px-6 space-y-6">
@@ -57,12 +61,15 @@ const Index = ({ authData, priceData }: IndexProps) => {
             priceLoading={priceData.loading}
             formatUsdValue={priceData.formatUsdValue}
             formatPercentChange={priceData.formatPercentChange}
+            selectedNetwork={authData.selectedNetwork}
           />
           <AIStakingCard />
           <ActionButtons 
             stellarAddress={authData.stellarAddress}
             onSendTransaction={authData.buildAndSubmitTransaction}
             onRefreshBalance={authData.getAccountBalance}
+            actor={authData.actor}
+            selectedNetwork={authData.selectedNetwork}
           />
         </div>
         
