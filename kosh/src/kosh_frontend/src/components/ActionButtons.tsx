@@ -153,26 +153,26 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance }: 
         {actions.map((action, index) => (
           <Card 
             key={action.label} 
-            className={`p-6 bg-gradient-card backdrop-blur-md border-border/20 shadow-card hover:shadow-crypto transition-all duration-300 cursor-pointer group relative overflow-hidden ${
+            className={`p-6 bg-gradient-card backdrop-blur-md border-border/20 shadow-card hover:shadow-crypto transition-smooth cursor-pointer group relative overflow-hidden animate-scale-in hover-lift ${
               action.disabled ? 'opacity-50 cursor-not-allowed' : ''
             }`}
             style={{ animationDelay: `${index * 0.1}s` }}
             onClick={action.disabled ? undefined : action.onClick}
           >
             {/* Hover glow effect */}
-            <div className="absolute inset-0 bg-gradient-glow opacity-0 group-hover:opacity-30 transition-opacity duration-300"></div>
+            <div className="absolute inset-0 bg-gradient-glow opacity-0 group-hover:opacity-30 transition-smooth animate-shimmer"></div>
             
             <div className="relative z-10 flex flex-col items-center gap-3 text-center">
-              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${action.gradient} ${action.hoverGradient} flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-glow`}>
-                <action.icon className="w-6 h-6 text-white group-hover:animate-float" />
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${action.gradient} ${action.hoverGradient} flex items-center justify-center transition-bounce group-hover:scale-110 animate-pulse-glow`}>
+                <action.icon className="w-6 h-6 text-white group-hover:animate-float transition-smooth" />
               </div>
-              <span className="font-medium text-foreground group-hover:text-primary transition-colors duration-300">
+              <span className="font-medium text-foreground group-hover:text-primary transition-smooth">
                 {action.label}
               </span>
             </div>
             
             {/* Animated border */}
-            <div className="absolute inset-0 rounded-lg border border-transparent bg-gradient-to-r from-transparent via-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div className="absolute inset-0 rounded-lg border border-transparent bg-gradient-to-r from-transparent via-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-smooth"></div>
           </Card>
         ))}
       </div>

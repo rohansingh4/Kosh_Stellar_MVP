@@ -36,9 +36,9 @@ const Index = ({ authData, priceData }: IndexProps) => {
                       (window as any).chrome.runtime.id;
   
   return (
-    <div className={`${isExtension ? 'w-[400px] h-[600px]' : 'min-h-screen'} bg-gradient-main relative overflow-hidden`}>
+    <div className={`${isExtension ? 'w-[400px] h-[600px]' : 'min-h-screen'} bg-gradient-main relative overflow-hidden animate-fade-in`}>
       {/* Background decorative elements */}
-      <div className="absolute inset-0 bg-gradient-glow opacity-20"></div>
+      <div className="absolute inset-0 bg-gradient-glow opacity-20 animate-pulse-glow"></div>
       {!isExtension && (
         <>
           <div className="absolute top-20 left-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl animate-float"></div>
@@ -47,35 +47,47 @@ const Index = ({ authData, priceData }: IndexProps) => {
       )}
       
       {/* Main content */}
-      <div className={`relative z-10 max-w-md mx-auto ${isExtension ? 'h-full overflow-y-auto' : ''}`}>
-        <WalletHeader 
-          principal={authData.principal}
-          onLogout={authData.logout}
-        />
-        
-        <div className="px-6 space-y-6">
-          <AddressDisplay 
-            stellarAddress={authData.stellarAddress}
-            walletLoading={authData.walletLoading}
-            onRetryAddress={authData.getStellarAddress}
-          />
-          <BalanceDisplay 
-            stellarAddress={authData.stellarAddress}
-            onGetBalance={authData.getAccountBalance}
-            priceData={priceData.data}
-            priceLoading={priceData.loading}
-            formatUsdValue={priceData.formatUsdValue}
-            formatPercentChange={priceData.formatPercentChange}
-          />
-          <AIStakingCard />
-          <ActionButtons 
-            stellarAddress={authData.stellarAddress}
-            onSendTransaction={authData.buildAndSubmitTransaction}
-            onRefreshBalance={authData.getAccountBalance}
+      <div className={`relative z-10 max-w-md mx-auto ${isExtension ? 'h-full overflow-y-auto custom-scrollbar smooth-scroll' : ''}`}>
+        <div className="animate-slide-in-up">
+          <WalletHeader 
+            principal={authData.principal}
+            onLogout={authData.logout}
           />
         </div>
         
-        <WalletFooter />
+        <div className="px-6 space-y-6">
+          <div className="animate-slide-in-up" style={{ animationDelay: '0.1s' }}>
+            <AddressDisplay 
+              stellarAddress={authData.stellarAddress}
+              walletLoading={authData.walletLoading}
+              onRetryAddress={authData.getStellarAddress}
+            />
+          </div>
+          <div className="animate-slide-in-up" style={{ animationDelay: '0.2s' }}>
+            <BalanceDisplay 
+              stellarAddress={authData.stellarAddress}
+              onGetBalance={authData.getAccountBalance}
+              priceData={priceData.data}
+              priceLoading={priceData.loading}
+              formatUsdValue={priceData.formatUsdValue}
+              formatPercentChange={priceData.formatPercentChange}
+            />
+          </div>
+          <div className="animate-slide-in-up" style={{ animationDelay: '0.3s' }}>
+            <AIStakingCard />
+          </div>
+          <div className="animate-slide-in-up" style={{ animationDelay: '0.4s' }}>
+            <ActionButtons 
+              stellarAddress={authData.stellarAddress}
+              onSendTransaction={authData.buildAndSubmitTransaction}
+              onRefreshBalance={authData.getAccountBalance}
+            />
+          </div>
+        </div>
+        
+        <div className="animate-fade-in" style={{ animationDelay: '0.5s' }}>
+          <WalletFooter />
+        </div>
       </div>
     </div>
   );

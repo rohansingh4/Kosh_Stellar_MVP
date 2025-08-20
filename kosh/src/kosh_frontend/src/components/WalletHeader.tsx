@@ -48,8 +48,8 @@ const WalletHeader = ({ principal, onLogout }: WalletHeaderProps) => {
         </div>
         
         {/* Center: KOSH Brand */}
-        <div className="flex items-center justify-center">
-          <img src={koshLogo} alt="KOSH" className="h-16 w-auto animate-float shadow-glow" />
+        <div className="flex items-center justify-center animate-bounce-in">
+          <img src={koshLogo} alt="KOSH" className="h-16 w-auto animate-float hover-glow transition-smooth" />
         </div>
         
         {/* Right: Settings */}
