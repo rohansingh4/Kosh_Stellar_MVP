@@ -91,6 +91,27 @@ const AuthenticatedApp = () => {
             }}
           />
         } />
+        <Route path="/index.html" element={
+          <Index 
+            authData={{
+              principal,
+              actor,
+              walletLoading,
+              stellarAddress,
+              logout,
+              getStellarAddress,
+              buildAndSubmitTransaction,
+              getAccountBalance,
+            }}
+            priceData={{
+              data: priceData,
+              loading: priceLoading,
+              refresh: fetchPriceData,
+              formatUsdValue,
+              formatPercentChange
+            }}
+          />
+        } />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

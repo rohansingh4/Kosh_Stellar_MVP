@@ -14,7 +14,8 @@
       "storage",
       "tabs",
       "notifications",
-      "contextMenus"
+      "contextMenus",
+      "activeTab"
     ],
     "host_permissions": [
       "https://*.stellar.org/*",

@@ -7,7 +7,6 @@
     "setup": "npm i && dfx canister create kosh_backend && dfx generate kosh_backend && dfx deploy",
     "dev": "vite --port 3000",
     "start": "vite --port 3000",
-    "prebuild": "dfx generate",
     "build": "tsc && vite build && node build-extension.js",
     "build:dev": "vite build --mode development && node build-extension.js",
     "build:extension": "npm run build",

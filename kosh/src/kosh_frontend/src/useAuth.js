@@ -10,10 +10,17 @@ const CANISTER_IDS = {
   FRONTEND: 'u6s2n-gx777-77774-qaaba-cai'
 };
 
-// Detect if we're on the canister URL or localhost
+// Detect if we're on the canister URL, localhost, or extension
 const getHost = () => {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
+    
+    // Check if running in Chrome extension
+    if (window.location.protocol === 'chrome-extension:') {
+      // For extension, use localhost for development or IC mainnet for production
+      return 'http://localhost:4943';
+    }
+    
     if (hostname.includes('localhost') || hostname === '127.0.0.1') {
       return 'http://localhost:4943';
     } else {
@@ -71,61 +78,65 @@ export const useAuth = () => {
   }, [principal]);
 
   useEffect(() => {
-    initializeAuth();
-  }, []);
-
-  const initializeAuth = async () => {
-    try {
-      console.log('Initializing auth client...');
-      const client = await AuthClient.create();
-      setAuthClient(client);
-      
-      const isAuth = await client.isAuthenticated();
-      console.log('Authentication status:', isAuth);
-      setIsAuthenticated(isAuth);
-      
-      if (isAuth) {
-        console.log('User is authenticated, setting up actor...');
-        const identity = client.getIdentity();
-        const userPrincipal = identity.getPrincipal();
-        setPrincipal(userPrincipal);
-        console.log('Principal:', userPrincipal.toString());
+    const initAuthClient = async () => {
+      try {
+        console.log('Initializing auth client...');
+        const client = await AuthClient.create();
+        setAuthClient(client);
         
-        // Create authenticated actor
-        const authenticatedActor = createActor(CANISTER_IDS.BACKEND, {
-          agentOptions: {
-            identity,
-            host: HOST
-          },
-        });
-        setActor(authenticatedActor);
-        console.log('Actor created successfully');
+        const isAuthenticated = await client.isAuthenticated();
+        console.log('Authentication status:', isAuthenticated);
         
-        // Auto-generate address if not cached for this user
-        const userPrincipalStr = userPrincipal.toString();
-        const cacheKey = `kosh_stellar_address_${userPrincipalStr}`;
-        const cachedAddress = localStorage.getItem(cacheKey);
-        console.log('Cache key:', cacheKey);
-        console.log('Cached address:', cachedAddress ? 'Found' : 'Not found');
-        
-        if (!cachedAddress) {
-          console.log('No cached address found for user, generating new address...');
-          // Use setTimeout to ensure actor is set
-          setTimeout(() => {
-            generateStellarAddressAuto(authenticatedActor, userPrincipalStr);
-          }, 100);
+        if (isAuthenticated) {
+          console.log('User is authenticated, setting up actor...');
+          const identity = client.getIdentity();
+          const userPrincipal = identity.getPrincipal();
+          console.log('Principal:', userPrincipal.toString());
+          
+          setPrincipal(userPrincipal);
+          setIsAuthenticated(true);
+          
+          // Determine the correct host for the actor based on context
+          const isExtension = window.location.protocol === 'chrome-extension:';
+          const actorHost = isExtension ? 'http://localhost:4943' : HOST;
+          
+          // Create authenticated actor
+          const authenticatedActor = createActor(CANISTER_IDS.BACKEND, {
+            agentOptions: {
+              identity,
+              host: actorHost
+            },
+          });
+          console.log('Actor created successfully');
+          setActor(authenticatedActor);
+          
+          // Auto-generate address if not cached for this user
+          const userPrincipalStr = userPrincipal.toString();
+          const cacheKey = `kosh_stellar_address_${userPrincipalStr}`;
+          const cachedAddress = localStorage.getItem(cacheKey);
+          console.log('Cache key:', cacheKey);
+          console.log('Cached address:', cachedAddress ? 'Found' : 'Not found');
+          
+          if (!cachedAddress) {
+            console.log('No cached address found for user, generating new address...');
+            // Use setTimeout to ensure actor is set
+            setTimeout(() => {
+              generateStellarAddressAuto(authenticatedActor, userPrincipalStr);
+            }, 100);
+          } else {
+            console.log('Using cached address');
+          }
         } else {
-          console.log('Using cached address');
+          console.log('User is not authenticated');
         }
-      } else {
-        console.log('User is not authenticated');
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Error initializing auth:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    initAuthClient();
+  }, []);
 
   const login = async () => {
     if (!authClient) return;
@@ -133,18 +144,49 @@ export const useAuth = () => {
     try {
       setLoading(true);
       
-      // Use standard AuthClient login for both extension and web
-      await authClient.login({
-        identityProvider: HOST.includes('localhost') 
-          ? `http://${CANISTER_IDS.INTERNET_IDENTITY}.localhost:4943`
-          : `${HOST}?canisterId=${CANISTER_IDS.INTERNET_IDENTITY}`,
-        windowOpenerFeatures: "width=400,height=500,left=100,top=100,scrollbars=yes,resizable=yes",
-        onSuccess: completeAuthentication,
-        onError: (error) => {
-          console.error('Authentication failed:', error);
-          setLoading(false);
-        }
-      });
+      // Check if running in extension context
+      const isExtension = typeof window.chrome !== 'undefined' && 
+                          window.chrome.runtime && 
+                          window.chrome.runtime.id;
+      
+      if (isExtension) {
+        // For extension, use a more controlled approach to keep popup open
+        await authClient.login({
+          identityProvider: HOST.includes('localhost') || HOST.includes('chrome') 
+            ? `http://${CANISTER_IDS.INTERNET_IDENTITY}.localhost:4943`
+            : `${HOST}?canisterId=${CANISTER_IDS.INTERNET_IDENTITY}`,
+          windowOpenerFeatures: "width=500,height=600,left=200,top=200,scrollbars=yes,resizable=yes,toolbar=no,menubar=no,location=no,status=no",
+          onSuccess: async () => {
+            // Ensure we complete authentication and keep the extension popup open
+            await completeAuthentication();
+            // Store authentication success in extension storage to persist state
+            if (window.chrome && window.chrome.storage) {
+              await window.chrome.storage.local.set({ 'kosh_authenticated': true });
+            }
+            // Focus back to the extension popup if possible
+            if (window.focus) {
+              window.focus();
+            }
+          },
+          onError: (error) => {
+            console.error('Authentication failed:', error);
+            setLoading(false);
+          }
+        });
+      } else {
+        // Standard web app flow
+        await authClient.login({
+          identityProvider: HOST.includes('localhost') || HOST.includes('chrome') 
+            ? `http://${CANISTER_IDS.INTERNET_IDENTITY}.localhost:4943`
+            : `${HOST}?canisterId=${CANISTER_IDS.INTERNET_IDENTITY}`,
+          windowOpenerFeatures: "width=500,height=600,left=100,top=100,scrollbars=yes,resizable=yes",
+          onSuccess: completeAuthentication,
+          onError: (error) => {
+            console.error('Authentication failed:', error);
+            setLoading(false);
+          }
+        });
+      }
     } catch (error) {
       console.error('Login failed:', error);
       setLoading(false);
@@ -157,11 +199,15 @@ export const useAuth = () => {
       setPrincipal(identity.getPrincipal());
       setIsAuthenticated(true);
       
+      // Determine the correct host for the actor based on context
+      const isExtension = window.location.protocol === 'chrome-extension:';
+      const actorHost = isExtension ? 'http://localhost:4943' : HOST;
+      
       // Create authenticated actor
       const authenticatedActor = createActor(CANISTER_IDS.BACKEND, {
         agentOptions: {
           identity,
-          host: HOST
+          host: actorHost
         },
       });
       setActor(authenticatedActor);
@@ -194,14 +240,20 @@ export const useAuth = () => {
       
       // Clear cached address for this user before clearing principal
       if (principal) {
-        const cacheKey = `kosh_stellar_address_${principal.toString()}`;
+        const userPrincipal = principal.toString();
+        const cacheKey = `kosh_stellar_address_${userPrincipal}`;
         localStorage.removeItem(cacheKey);
       }
       
-      setIsAuthenticated(false);
+      // Clear extension storage if in extension context
+      if (window.chrome && window.chrome.storage) {
+        await window.chrome.storage.local.remove('kosh_authenticated');
+      }
+      
       setPrincipal(null);
+      setIsAuthenticated(false);
       setActor(null);
-      setStellarAddress(null);
+      setStellarAddress('');
     } catch (error) {
       console.error('Logout failed:', error);
     } finally {
