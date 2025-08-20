@@ -212,7 +212,21 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
         [networkType]
       );
 
-      console.log('Swap result:', result);
+      console.log('Raw swap result from backend:', result);
+      
+      // Add more detailed logging
+      if (result.Ok) {
+        console.log('Backend returned Ok, parsing JSON...');
+        try {
+          const parsed = JSON.parse(result.Ok);
+          console.log('Parsed response:', parsed);
+        } catch (parseErr) {
+          console.error('Failed to parse backend response as JSON:', parseErr);
+          console.log('Raw response content:', result.Ok);
+        }
+      } else {
+        console.log('Backend returned Err:', result.Err);
+      }
 
       if (result.Ok) {
         const swapData = JSON.parse(result.Ok);
@@ -251,7 +265,13 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
             onSwapComplete();
           }
         } else {
-          throw new Error(swapData.error || "Swap failed");
+          // Show detailed error information
+          const errorTitle = swapData.title || "Swap Failed";
+          const errorDetail = swapData.detail || swapData.error || "Unknown error";
+          const errorCodes = swapData.error_codes ? ` (${swapData.error_codes.join(", ")})` : "";
+          
+          console.error('Detailed swap error:', swapData);
+          throw new Error(`${errorTitle}: ${errorDetail}${errorCodes}`);
         }
       } else {
         throw new Error(result.Err || "Swap failed");
@@ -468,11 +488,11 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
         )}
 
         {/* Status Info */}
-        <div className="flex items-start gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-          <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-          <div className="text-xs text-green-200">
-            <p className="font-medium">Real Swaps Active! ✨</p>
-            <p>KOSH now executes real Path Payment Strict Send operations on Stellar. Your swaps will create actual blockchain transactions with tokens deposited to your wallet.</p>
+        <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+          <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+          <div className="text-xs text-amber-200">
+            <p className="font-medium">Debug Mode: Simple Payment Test 🔧</p>
+            <p>Currently testing with basic XLM payment transactions to debug the transaction flow. This will send XLM to your address instead of token swapping while we troubleshoot.</p>
           </div>
         </div>
 

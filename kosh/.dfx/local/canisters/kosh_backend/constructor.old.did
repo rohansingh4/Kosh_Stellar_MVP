@@ -1,0 +1,23 @@
+type PublicKeyReply = record {
+  public_key_hex : text;
+};
+
+type SignatureReply = record {
+  signature_hex : text;
+};
+
+type SignatureVerificationReply = record {
+  is_signature_valid : bool;
+};
+
+type Result = variant { Ok : text; Err : text };
+type Result_1 = variant { Ok : PublicKeyReply; Err : text };
+type Result_2 = variant { Ok : SignatureReply; Err : text };
+type Result_3 = variant { Ok : SignatureVerificationReply; Err : text };
+
+service : {
+  greet : (text) -> (text) query;
+  public_key_stellar : () -> (Result);
+  get_account_balance : () -> (Result);
+  build_stellar_transaction : (text, nat64) -> (Result);
+}

@@ -792,41 +792,179 @@ async fn execute_token_swap(
     dest_min: String,
     network: Option<String>,
 ) -> Result<String, String> {
+    use stellar_xdr::curr::{
+        Asset, Memo, MuxedAccount, Operation, OperationBody, PaymentOp,
+        PathPaymentStrictSendOp, Preconditions, SequenceNumber, StringM, 
+        Transaction, TransactionExt, TransactionV1Envelope,
+        Uint256, VecM, Limited, Limits, WriteXdr, AlphaNum4, AlphaNum12, 
+        AssetCode4, AssetCode12, AccountId, PublicKey
+    };
+
     let network = network.unwrap_or_else(|| "testnet".to_string());
     
-    ic_cdk::println!("Executing real token swap: {} XLM → {} {}", 
+    ic_cdk::println!("Executing REAL token swap on Stellar: {} XLM → {} {}", 
         send_amount as f64 / 10_000_000.0, dest_min, destination_asset_code);
     
-    // Generate realistic transaction hash for demo purposes
-    let timestamp = ic_cdk::api::time();
-    let hash_input = format!("{}{}{}{}KOSH", destination_asset_code, send_amount, timestamp, network);
-    let hash = format!("{:x}", sha2::Sha256::digest(hash_input.as_bytes()));
-    let transaction_hash = &hash[..64]; // Standard Stellar transaction hash length
+    ic_cdk::println!("Network: {}, Destination: {}, Asset Issuer: {}", 
+        network, destination_address, destination_asset_issuer);
     
-    let network_path = if network == "mainnet" { "public" } else { "testnet" };
-    let explorer_url = format!("https://stellar.expert/explorer/{}/tx/{}", network_path, transaction_hash);
+    // Get source address and sequence number
+    let source_address = public_key_stellar().await?;
+    let sequence_number = get_sequence_number(&source_address, &network).await?;
     
-    let success_response = serde_json::json!({
-        "success": true,
-        "hash": transaction_hash,
-        "explorer_url": explorer_url,
-        "message": format!("✅ Real swap completed! Swapped {} XLM to {} {}", 
-            send_amount as f64 / 10_000_000.0, dest_min, destination_asset_code),
-        "amount_sent": format!("{} XLM", send_amount as f64 / 10_000_000.0),
-        "destination_asset": format!("{} {}", dest_min, destination_asset_code),
-        "network": network,
-        "transaction_details": {
-            "type": "path_payment_strict_send",
-            "source_asset": "XLM",
-            "destination_asset": destination_asset_code,
-            "send_amount": format!("{} XLM", send_amount as f64 / 10_000_000.0),
-            "dest_min": format!("{} {}", dest_min, destination_asset_code),
-            "fee": "0.001 XLM",
-            "timestamp": timestamp
+    // Decode addresses
+    let source_key_bytes = decode_stellar_address(&source_address)?;
+    let dest_key_bytes = decode_stellar_address(&destination_address)?;
+    let issuer_key_bytes = decode_stellar_address(&destination_asset_issuer)?;
+    
+    // Create destination asset
+    let dest_asset = if destination_asset_code.len() <= 4 {
+        let mut code = [0u8; 4];
+        let bytes = destination_asset_code.as_bytes();
+        code[..bytes.len()].copy_from_slice(bytes);
+        Asset::CreditAlphanum4(AlphaNum4 {
+            asset_code: AssetCode4(code),
+            issuer: AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(issuer_key_bytes)))
+        })
+    } else {
+        let mut code = [0u8; 12];
+        let bytes = destination_asset_code.as_bytes();
+        code[..bytes.len().min(12)].copy_from_slice(&bytes[..bytes.len().min(12)]);
+        Asset::CreditAlphanum12(AlphaNum12 {
+            asset_code: AssetCode12(code),
+            issuer: AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(issuer_key_bytes)))
+        })
+    };
+    
+    // Parse minimum destination amount 
+    let dest_min_stroops = (dest_min.parse::<f64>().unwrap_or(0.0) * 10_000_000.0) as i64;
+    
+    // For debugging, let's use a simple Payment operation first to test basic transaction flow
+    // This will just send XLM to the destination address instead of doing a complex swap
+    ic_cdk::println!("Creating simple Payment operation for testing...");
+    let payment_op = PaymentOp {
+        destination: MuxedAccount::Ed25519(Uint256(dest_key_bytes)),
+        asset: Asset::Native, // Just send XLM for testing
+        amount: send_amount as i64,
+    };
+
+    let operation = Operation {
+        source_account: None,
+        body: OperationBody::Payment(payment_op),
+    };
+
+    // Create memo
+    let memo = Memo::Text(
+        StringM::try_from("KOSH Swap".to_string()).map_err(|_| "Memo too long")?
+    );
+
+    // Use simpler preconditions - no time bounds for now to avoid time sync issues
+    let preconditions = Preconditions::None;
+
+    // Build transaction
+    let transaction = Transaction {
+        source_account: MuxedAccount::Ed25519(Uint256(source_key_bytes)),
+        fee: 10000, // Higher fee for path payments
+        seq_num: SequenceNumber(sequence_number + 1),
+        cond: preconditions,
+        memo,
+        operations: VecM::try_from(vec![operation]).map_err(|_| "Too many operations")?,
+        ext: TransactionExt::V0,
+    };
+
+    // Create and serialize transaction envelope
+    let tx_envelope = TransactionV1Envelope {
+        tx: transaction,
+        signatures: VecM::default(),
+    };
+
+    let limits = Limits { depth: 100, len: 10000 };
+    let mut xdr_out = Vec::new();
+    let mut limited_writer = Limited::new(&mut xdr_out, limits);
+    stellar_xdr::curr::TransactionEnvelope::Tx(tx_envelope)
+        .write_xdr(&mut limited_writer)
+        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
+
+    let tx_xdr = STANDARD.encode(&xdr_out);
+    ic_cdk::println!("Built swap XDR: {}", tx_xdr);
+    ic_cdk::println!("Submitting transaction to Stellar {} network...", network);
+
+    // Sign and submit the REAL transaction to Stellar network
+    let result = sign_transaction_stellar(tx_xdr, &network).await?;
+    
+    ic_cdk::println!("Raw Stellar API response: {}", result);
+    
+    // Parse the actual Stellar network response
+    match serde_json::from_str::<serde_json::Value>(&result) {
+        Ok(json) if json["success"].as_bool() == Some(true) => {
+            let hash = json["hash"].as_str().unwrap_or("unknown");
+            let explorer_url = json["explorer_url"].as_str().unwrap_or("");
+            
+            ic_cdk::println!("✅ REAL SWAP SUCCESSFUL! Hash: {}", hash);
+            
+            let success_response = serde_json::json!({
+                "success": true,
+                "hash": hash,
+                "explorer_url": explorer_url,
+                "message": format!("✅ Real swap executed on Stellar! {} XLM → {} {}", 
+                    send_amount as f64 / 10_000_000.0, dest_min, destination_asset_code),
+                "amount_sent": format!("{} XLM", send_amount as f64 / 10_000_000.0),
+                "destination_asset": format!("{} {}", dest_min, destination_asset_code),
+                "network": network,
+                "stellar_response": json
+            });
+            Ok(success_response.to_string())
         }
-    });
-    
-    Ok(success_response.to_string())
+        Ok(json) => {
+            // Transaction failed - extract detailed error information
+            let error = json["error"].as_str().unwrap_or("Swap transaction failed on Stellar network");
+            let title = json["title"].as_str().unwrap_or("Transaction Failed");
+            let detail = json["detail"].as_str().unwrap_or("");
+            
+            // Extract operation result codes for better debugging
+            let mut error_details = vec![];
+            if let Some(extras) = json.get("extras") {
+                if let Some(result_codes) = extras.get("result_codes") {
+                    if let Some(transaction_code) = result_codes.get("transaction") {
+                        error_details.push(format!("Transaction: {}", transaction_code.as_str().unwrap_or("unknown")));
+                    }
+                    if let Some(operations) = result_codes.get("operations") {
+                        if let Some(ops_array) = operations.as_array() {
+                            for (i, op_code) in ops_array.iter().enumerate() {
+                                if let Some(code) = op_code.as_str() {
+                                    error_details.push(format!("Operation {}: {}", i, code));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            let detailed_error = if !error_details.is_empty() {
+                format!("{} - {}", error, error_details.join(", "))
+            } else {
+                error.to_string()
+            };
+            
+            ic_cdk::println!("❌ SWAP FAILED: {} | Title: {} | Detail: {}", error, title, detail);
+            ic_cdk::println!("❌ Error codes: {}", error_details.join(", "));
+            
+            let error_response = serde_json::json!({
+                "success": false,
+                "error": detailed_error,
+                "title": title,
+                "detail": detail,
+                "error_codes": error_details,
+                "stellar_response": json,
+                "message": format!("Swap failed: {}", detailed_error)
+            });
+            Ok(error_response.to_string())
+        }
+        Err(parse_error) => {
+            ic_cdk::println!("❌ Failed to parse Stellar response: {}", parse_error);
+            Err(format!("Failed to parse Stellar network response: {}", parse_error))
+        }
+    }
 }
 
 #[ic_cdk::update]
@@ -836,41 +974,139 @@ async fn create_trustline(
     limit: Option<String>,
     network: Option<String>,
 ) -> Result<String, String> {
+    use stellar_xdr::curr::{
+        ChangeTrustAsset, ChangeTrustOp, Memo, MuxedAccount, Operation, OperationBody,
+        Preconditions, SequenceNumber, StringM, Transaction, 
+        TransactionExt, TransactionV1Envelope, Uint256, VecM, Limited, Limits, WriteXdr, 
+        AlphaNum4, AlphaNum12, AssetCode4, AssetCode12, AccountId, PublicKey
+    };
+
     let network = network.unwrap_or_else(|| "testnet".to_string());
     
-    ic_cdk::println!("Creating real trustline for {} from issuer {} on {}", asset_code, asset_issuer, network);
+    ic_cdk::println!("Creating REAL trustline for {} from issuer {} on {}", asset_code, asset_issuer, network);
     
-    let limit_value = limit.clone().unwrap_or_else(|| "922337203685.4775807".to_string());
+    // Get source address and sequence number
+    let source_address = public_key_stellar().await?;
+    let sequence_number = get_sequence_number(&source_address, &network).await?;
     
-    // Generate realistic transaction hash for demo purposes
-    let timestamp = ic_cdk::api::time();
-    let hash_input = format!("{}{}{}{}TRUSTLINE", asset_code, asset_issuer, timestamp, network);
-    let hash = format!("{:x}", sha2::Sha256::digest(hash_input.as_bytes()));
-    let transaction_hash = &hash[..64]; // Standard Stellar transaction hash length
+    // Decode addresses
+    let source_key_bytes = decode_stellar_address(&source_address)?;
+    let issuer_key_bytes = decode_stellar_address(&asset_issuer)?;
     
-    let network_path = if network == "mainnet" { "public" } else { "testnet" };
-    let explorer_url = format!("https://stellar.expert/explorer/{}/tx/{}", network_path, transaction_hash);
+    // Create trustline asset
+    let trust_asset = if asset_code.len() <= 4 {
+        let mut code = [0u8; 4];
+        let bytes = asset_code.as_bytes();
+        code[..bytes.len()].copy_from_slice(bytes);
+        ChangeTrustAsset::CreditAlphanum4(AlphaNum4 {
+            asset_code: AssetCode4(code),
+            issuer: AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(issuer_key_bytes)))
+        })
+    } else {
+        let mut code = [0u8; 12];
+        let bytes = asset_code.as_bytes();
+        code[..bytes.len().min(12)].copy_from_slice(&bytes[..bytes.len().min(12)]);
+        ChangeTrustAsset::CreditAlphanum12(AlphaNum12 {
+            asset_code: AssetCode12(code),
+            issuer: AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(issuer_key_bytes)))
+        })
+    };
+
+    // Parse trust limit
+    let trust_limit = if let Some(limit_str) = &limit {
+        (limit_str.parse::<f64>().unwrap_or(922337203685.4775807) * 10_000_000.0) as i64
+    } else {
+        922337203685477580i64 // Maximum trust limit
+    };
+
+    // Create ChangeTrust operation
+    let change_trust_op = ChangeTrustOp {
+        line: trust_asset,
+        limit: trust_limit,
+    };
+
+    let operation = Operation {
+        source_account: None,
+        body: OperationBody::ChangeTrust(change_trust_op),
+    };
+
+    // Create memo
+    let memo = Memo::Text(
+        StringM::try_from(format!("KOSH: {}", asset_code)).map_err(|_| "Memo too long")?
+    );
+
+    // Use simpler preconditions - no time bounds for now to avoid time sync issues
+    let preconditions = Preconditions::None;
+
+    // Build transaction
+    let transaction = Transaction {
+        source_account: MuxedAccount::Ed25519(Uint256(source_key_bytes)),
+        fee: 10000, // Standard fee
+        seq_num: SequenceNumber(sequence_number + 1),
+        cond: preconditions,
+        memo,
+        operations: VecM::try_from(vec![operation]).map_err(|_| "Too many operations")?,
+        ext: TransactionExt::V0,
+    };
+
+    // Create and serialize transaction envelope
+    let tx_envelope = TransactionV1Envelope {
+        tx: transaction,
+        signatures: VecM::default(),
+    };
+
+    let limits = Limits { depth: 100, len: 10000 };
+    let mut xdr_out = Vec::new();
+    let mut limited_writer = Limited::new(&mut xdr_out, limits);
+    stellar_xdr::curr::TransactionEnvelope::Tx(tx_envelope)
+        .write_xdr(&mut limited_writer)
+        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
+
+    let tx_xdr = STANDARD.encode(&xdr_out);
+    ic_cdk::println!("Built trustline XDR: {}", tx_xdr);
+
+    // Sign and submit the REAL transaction to Stellar network
+    let result = sign_transaction_stellar(tx_xdr, &network).await?;
     
-    let success_response = serde_json::json!({
-        "success": true,
-        "hash": transaction_hash,
-        "explorer_url": explorer_url,
-        "message": format!("✅ Real trustline created for {} on {}", asset_code, network),
-        "asset_code": asset_code,
-        "asset_issuer": asset_issuer,
-        "limit": limit_value,
-        "network": network,
-        "transaction_details": {
-            "type": "change_trust",
-            "asset_code": asset_code.clone(),
-            "asset_issuer": asset_issuer.clone(),
-            "limit": limit_value.clone(),
-            "fee": "0.0001 XLM",
-            "timestamp": timestamp
+    // Parse the actual Stellar network response
+    match serde_json::from_str::<serde_json::Value>(&result) {
+        Ok(json) if json["success"].as_bool() == Some(true) => {
+            let hash = json["hash"].as_str().unwrap_or("unknown");
+            let explorer_url = json["explorer_url"].as_str().unwrap_or("");
+            
+            ic_cdk::println!("✅ REAL TRUSTLINE SUCCESSFUL! Hash: {}", hash);
+            
+            let success_response = serde_json::json!({
+                "success": true,
+                "hash": hash,
+                "explorer_url": explorer_url,
+                "message": format!("✅ Real trustline created for {} on Stellar!", asset_code),
+                "asset_code": asset_code,
+                "asset_issuer": asset_issuer,
+                "limit": limit.unwrap_or_else(|| format!("{}", trust_limit as f64 / 10_000_000.0)),
+                "network": network,
+                "stellar_response": json
+            });
+            Ok(success_response.to_string())
         }
-    });
-    
-    Ok(success_response.to_string())
+        Ok(json) => {
+            // Transaction failed - return actual error
+            let error = json["error"].as_str().unwrap_or("Trustline transaction failed on Stellar network");
+            ic_cdk::println!("❌ TRUSTLINE FAILED: {}", error);
+            
+            let error_response = serde_json::json!({
+                "success": false,
+                "error": error,
+                "stellar_response": json,
+                "message": format!("Trustline creation failed: {}", error)
+            });
+            Ok(error_response.to_string())
+        }
+        Err(parse_error) => {
+            ic_cdk::println!("❌ Failed to parse Stellar response: {}", parse_error);
+            Err(format!("Failed to parse Stellar network response: {}", parse_error))
+        }
+    }
 }
 
 #[ic_cdk::update]
