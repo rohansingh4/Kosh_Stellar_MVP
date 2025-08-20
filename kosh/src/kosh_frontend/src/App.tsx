@@ -48,8 +48,13 @@ const AuthenticatedApp = () => {
   };
 
   if (loading) {
+    // Check if running in extension context
+    const isExtension = typeof (window as any).chrome !== 'undefined' && 
+                        (window as any).chrome.runtime && 
+                        (window as any).chrome.runtime.id;
+    
     return (
-      <div className="min-h-screen bg-gradient-main flex items-center justify-center">
+      <div className={`${isExtension ? 'w-[400px] h-[600px]' : 'min-h-screen'} bg-gradient-main flex items-center justify-center`}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-white">Loading wallet...</p>

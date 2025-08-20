@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kosh Wallet</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            width: 400px;
+            height: 600px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            overflow: hidden;
+        }
+        
+        .container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .logo {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 10px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .subtitle {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        .content {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .wallet-status {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-connected {
+            background: #4ade80;
+        }
+        
+        .status-disconnected {
+            background: #f87171;
+        }
+        
+        .balance-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+        
+        .balance-amount {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        .balance-usd {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        .address-display {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-family: monospace;
+            font-size: 12px;
+            word-break: break-all;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .address-display:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .button {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 8px;
+            padding: 12px 20px;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 10px;
+        }
+        
+        .button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+        
+        .button-primary {
+            background: #4ade80;
+        }
+        
+        .button-primary:hover {
+            background: #22c55e;
+        }
+        
+        .button-secondary {
+            background: #f59e0b;
+        }
+        
+        .button-secondary:hover {
+            background: #d97706;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        
+        .footer {
+            padding: 15px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        
+        .network-badge {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">K</div>
+            <div class="title">Kosh Wallet</div>
+            <div class="subtitle">Stellar Wallet Extension</div>
+        </div>
+        
+        <div class="content">
+            <!-- Loading State -->
+            <div id="loading-state" class="loading">
+                <div class="spinner"></div>
+                <div>Loading wallet...</div>
+            </div>
+            
+            <!-- Error State -->
+            <div id="error-state" class="hidden">
+                <div class="error" id="error-message"></div>
+                <button class="button" onclick="retryConnection()">Retry</button>
+            </div>
+            
+            <!-- Not Connected State -->
+            <div id="disconnected-state" class="hidden">
+                <div class="wallet-status">
+                    <span class="status-indicator status-disconnected"></span>
+                    Wallet Disconnected
+                </div>
+                <button class="button button-primary" onclick="connectWallet()">Connect Wallet</button>
+                <button class="button" onclick="openFullWallet()">Open Full Wallet</button>
+            </div>
+            
+            <!-- Connected State -->
+            <div id="connected-state" class="hidden">
+                <div class="wallet-status">
+                    <span class="status-indicator status-connected"></span>
+                    Wallet Connected
+                </div>
+                
+                <div class="balance-card">
+                    <div class="balance-amount" id="balance-amount">0.00 XLM</div>
+                    <div class="balance-usd" id="balance-usd">$0.00 USD</div>
+                </div>
+                
+                <div class="address-display" id="address-display" onclick="copyAddress()">
+                    Click to copy address
+                </div>
+                
+                <button class="button button-secondary" onclick="refreshBalance()">Refresh Balance</button>
+                <button class="button" onclick="openFullWallet()">Open Full Wallet</button>
+                <button class="button" onclick="disconnectWallet()">Disconnect</button>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <div>v1.5.0</div>
+            <div class="network-badge" id="network-badge">TESTNET</div>
+        </div>
+    </div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>

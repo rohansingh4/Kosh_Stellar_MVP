@@ -6,19 +6,28 @@ interface LoginPageProps {
 }
 
 const LoginPage = ({ onLogin }: LoginPageProps) => {
+  // Check if running in extension context
+  const isExtension = typeof (window as any).chrome !== 'undefined' && 
+                      (window as any).chrome.runtime && 
+                      (window as any).chrome.runtime.id;
+  
   return (
-    <div className="min-h-screen bg-gradient-main relative overflow-hidden">
+    <div className={`${isExtension ? 'w-[400px] h-[600px]' : 'min-h-screen'} bg-gradient-main relative overflow-hidden`}>
       {/* Background decorative elements */}
       <div className="absolute inset-0 bg-gradient-glow opacity-20"></div>
-      <div className="absolute top-20 left-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl animate-float"></div>
-      <div className="absolute bottom-20 right-10 w-40 h-40 bg-crypto-teal/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }}></div>
+      {!isExtension && (
+        <>
+          <div className="absolute top-20 left-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl animate-float"></div>
+          <div className="absolute bottom-20 right-10 w-40 h-40 bg-crypto-teal/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }}></div>
+        </>
+      )}
       
       {/* Main content */}
-      <div className="relative z-10 flex items-center justify-center min-h-screen px-6">
-        <div className="max-w-md w-full space-y-8 text-center">
+      <div className={`relative z-10 flex items-center justify-center ${isExtension ? 'h-full' : 'min-h-screen'} ${isExtension ? 'px-4 py-4' : 'px-6'}`}>
+        <div className="max-w-md w-full space-y-6 text-center">
           {/* Logo */}
-          <div className="space-y-6">
-            <div className="mx-auto w-20 h-20 bg-gradient-to-r from-primary to-crypto-teal rounded-full flex items-center justify-center animate-pulse-glow">
+          <div className={isExtension ? 'space-y-3' : 'space-y-6'}>
+            <div className={`mx-auto ${isExtension ? 'w-16 h-16' : 'w-20 h-20'} bg-gradient-to-r from-primary to-crypto-teal rounded-full flex items-center justify-center animate-pulse-glow`}>
               <img 
                 src={koshLogo} 
                 alt="KOSH Logo" 
@@ -34,18 +43,19 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
               <div className="text-2xl font-bold text-white hidden">K</div>
             </div>
             
-            <div className="space-y-2">
-              <h1 className="text-4xl font-bold text-white">KOSH Wallet</h1>
-              <p className="text-gray-300 text-lg">
+            <div className={isExtension ? 'space-y-1' : 'space-y-2'}>
+              <h1 className={`${isExtension ? 'text-2xl' : 'text-4xl'} font-bold text-white`}>KOSH Wallet</h1>
+              <p className={`text-gray-300 ${isExtension ? 'text-sm' : 'text-lg'}`}>
                 Your keyless crypto wallet powered by Internet Identity and threshold cryptography
               </p>
             </div>
           </div>
 
           {/* Authentication Options */}
-          <div className="space-y-4">
-            {/* Social Login Options - Coming Soon */}
-            <div className="space-y-3">
+          <div className={isExtension ? 'space-y-3' : 'space-y-4'}>
+            {/* Social Login Options - Coming Soon - Hide in extension for space */}
+            {!isExtension && (
+              <div className="space-y-3">
               <Button 
                 variant="outline" 
                 className="w-full bg-white/10 border-white/20 text-white hover:bg-white/20 relative opacity-60 cursor-not-allowed"
@@ -80,17 +90,20 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                   Coming Soon
                 </div>
               </Button>
-            </div>
+              </div>
+            )}
 
-            {/* Divider */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/20"></div>
+            {/* Divider - Hide in extension for space */}
+            {!isExtension && (
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-white/20"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-transparent text-gray-300">or</span>
+                </div>
               </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-transparent text-gray-300">or</span>
-              </div>
-            </div>
+            )}
 
             {/* Internet Identity Login */}
             <Button 
@@ -104,8 +117,8 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             </Button>
           </div>
 
-          {/* Footer */}
-          <div className="pt-8 space-y-4">
+          {/* Footer - Compact for extension */}
+          <div className={`${isExtension ? 'pt-4 space-y-2' : 'pt-8 space-y-4'}`}>
             <div className="flex items-center justify-center space-x-2">
               <img 
                 src="/logo2.svg" 
@@ -115,15 +128,17 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                   e.currentTarget.style.display = 'none';
                 }}
               />
-              <p className="text-gray-400 text-sm">Powered by Internet Computer</p>
+              <p className={`text-gray-400 ${isExtension ? 'text-xs' : 'text-sm'}`}>Powered by Internet Computer</p>
             </div>
             
-            <div className="text-xs text-gray-500 max-w-sm mx-auto">
-              <p className="flex items-center justify-center space-x-1">
-                <span>🔒</span>
-                <span>Truly decentralized wallet powered by Threshold cryptography</span>
-              </p>
-            </div>
+            {!isExtension && (
+              <div className="text-xs text-gray-500 max-w-sm mx-auto">
+                <p className="flex items-center justify-center space-x-1">
+                  <span>🔒</span>
+                  <span>Truly decentralized wallet powered by Threshold cryptography</span>
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

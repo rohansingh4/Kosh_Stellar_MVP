@@ -8,9 +8,9 @@
     "dev": "vite --port 3000",
     "start": "vite --port 3000",
     "prebuild": "dfx generate",
-    "build": "tsc && vite build",
-    "build:dev": "vite build --mode development",
-    "lint": "eslint .",
+    "build": "tsc && vite build && node build-extension.js",
+    "build:dev": "vite build --mode development && node build-extension.js",
+    "build:extension": "npm run build",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{json,js,jsx,ts,tsx,css,scss}\""
   },

@@ -30,15 +30,24 @@ interface IndexProps {
 }
 
 const Index = ({ authData, priceData }: IndexProps) => {
+  // Check if running in extension context
+  const isExtension = typeof (window as any).chrome !== 'undefined' && 
+                      (window as any).chrome.runtime && 
+                      (window as any).chrome.runtime.id;
+  
   return (
-    <div className="min-h-screen bg-gradient-main relative overflow-hidden">
+    <div className={`${isExtension ? 'w-[400px] h-[600px]' : 'min-h-screen'} bg-gradient-main relative overflow-hidden`}>
       {/* Background decorative elements */}
       <div className="absolute inset-0 bg-gradient-glow opacity-20"></div>
-      <div className="absolute top-20 left-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl animate-float"></div>
-      <div className="absolute bottom-20 right-10 w-40 h-40 bg-crypto-teal/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }}></div>
+      {!isExtension && (
+        <>
+          <div className="absolute top-20 left-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl animate-float"></div>
+          <div className="absolute bottom-20 right-10 w-40 h-40 bg-crypto-teal/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }}></div>
+        </>
+      )}
       
       {/* Main content */}
-      <div className="relative z-10 max-w-md mx-auto">
+      <div className={`relative z-10 max-w-md mx-auto ${isExtension ? 'h-full overflow-y-auto' : ''}`}>
         <WalletHeader 
           principal={authData.principal}
           onLogout={authData.logout}

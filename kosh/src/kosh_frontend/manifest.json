@@ -1,0 +1,68 @@
+{
+    "manifest_version": 3,
+    "name": "Kosh - Wallet Extension",
+    "version": "1.5.0",
+    "description": "Kosh - A Secure Stellar wallet Chrome extension for managing cryptocurrency",
+    "homepage_url": "https://kosh.tech",
+    "icons": {
+      "16": "icons/icon16.svg",
+      "32": "icons/icon32.svg",
+      "48": "icons/icon48.svg",
+      "128": "icons/icon128.svg"
+    },
+    "permissions": [
+      "storage",
+      "tabs",
+      "notifications",
+      "contextMenus"
+    ],
+    "host_permissions": [
+      "https://*.stellar.org/*",
+      "https://*.rpcpool.com/*",
+      "https://*.gorbscan.com/*",
+      "https://rpc.ankr.com/*",
+      "https://*.ic0.app/*",
+      "https://*.icp0.io/*",
+      "http://localhost:4943/*",
+      "http://127.0.0.1:4943/*"
+    ],
+    "action": {
+      "default_popup": "index.html",
+      "default_title": "Kosh Wallet",
+      "default_icon": {
+        "16": "icons/icon16.svg",
+        "32": "icons/icon32.svg",
+        "48": "icons/icon48.svg",
+        "128": "icons/icon128.svg"
+      }
+    },
+    "background": {
+      "service_worker": "background.js",
+      "type": "module"
+    },
+    "commands": {
+      "_execute_action": {
+        "suggested_key": {
+          "default": "Alt+Shift+T"
+        }
+      }
+    },
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "run_at": "document_start",
+        "exclude_globs": ["*chrome-extension*"],
+        "js": ["content.js"],
+        "all_frames": true
+      }
+    ],
+    "web_accessible_resources": [
+      {
+        "resources": ["assets/*", "injected.js"],
+        "matches": ["<all_urls>"]
+      }
+    ],
+    "content_security_policy": {
+      "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; frame-src https://*.ic0.app https://*.icp0.io http://localhost:4943 http://127.0.0.1:4943;"
+    }
+  }

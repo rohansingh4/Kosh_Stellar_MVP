@@ -132,40 +132,55 @@ export const useAuth = () => {
     
     try {
       setLoading(true);
+      
+      // Use standard AuthClient login for both extension and web
       await authClient.login({
         identityProvider: HOST.includes('localhost') 
           ? `http://${CANISTER_IDS.INTERNET_IDENTITY}.localhost:4943`
           : `${HOST}?canisterId=${CANISTER_IDS.INTERNET_IDENTITY}`,
-        onSuccess: async () => {
-          const identity = authClient.getIdentity();
-          setPrincipal(identity.getPrincipal());
-          setIsAuthenticated(true);
-          
-          // Create authenticated actor
-          const authenticatedActor = createActor(CANISTER_IDS.BACKEND, {
-            agentOptions: {
-              identity,
-              host: HOST
-            },
-          });
-          setActor(authenticatedActor);
-          
-          // Auto-generate address if not cached for this user
-          const userPrincipal = identity.getPrincipal().toString();
-          const cacheKey = `kosh_stellar_address_${userPrincipal}`;
-          const cachedAddress = localStorage.getItem(cacheKey);
-          if (!cachedAddress) {
-            console.log('No cached address found for user, generating new address...');
-            // Use setTimeout to ensure actor is set
-            setTimeout(() => {
-              generateStellarAddressAuto(authenticatedActor, userPrincipal);
-            }, 100);
-          }
-        },
+        windowOpenerFeatures: "width=400,height=500,left=100,top=100,scrollbars=yes,resizable=yes",
+        onSuccess: completeAuthentication,
+        onError: (error) => {
+          console.error('Authentication failed:', error);
+          setLoading(false);
+        }
       });
     } catch (error) {
       console.error('Login failed:', error);
-    } finally {
+      setLoading(false);
+    }
+  };
+
+  const completeAuthentication = async () => {
+    try {
+      const identity = authClient.getIdentity();
+      setPrincipal(identity.getPrincipal());
+      setIsAuthenticated(true);
+      
+      // Create authenticated actor
+      const authenticatedActor = createActor(CANISTER_IDS.BACKEND, {
+        agentOptions: {
+          identity,
+          host: HOST
+        },
+      });
+      setActor(authenticatedActor);
+      
+      // Auto-generate address if not cached for this user
+      const userPrincipal = identity.getPrincipal().toString();
+      const cacheKey = `kosh_stellar_address_${userPrincipal}`;
+      const cachedAddress = localStorage.getItem(cacheKey);
+      if (!cachedAddress) {
+        console.log('No cached address found for user, generating new address...');
+        // Use setTimeout to ensure actor is set
+        setTimeout(() => {
+          generateStellarAddressAuto(authenticatedActor, userPrincipal);
+        }, 100);
+      }
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Authentication completion failed:', error);
       setLoading(false);
     }
   };
