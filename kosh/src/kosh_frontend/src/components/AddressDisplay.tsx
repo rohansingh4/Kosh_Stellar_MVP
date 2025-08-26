@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Copy, Check, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { copyToClipboard } from "@/lib/clipboard";
 
 interface AddressDisplayProps {
   stellarAddress?: any;
@@ -20,17 +21,22 @@ const AddressDisplay = ({ stellarAddress, walletLoading, onRetryAddress }: Addre
     if (!address) return;
     
     try {
-      await navigator.clipboard.writeText(address);
-      setCopied(true);
-      toast({
-        title: "Address copied!",
-        description: "Stellar address copied to clipboard",
-      });
-      setTimeout(() => setCopied(false), 2000);
+      const success = await copyToClipboard(address);
+      
+      if (success) {
+        setCopied(true);
+        toast({
+          title: "Address copied!",
+          description: "Stellar address copied to clipboard",
+        });
+        setTimeout(() => setCopied(false), 2000);
+      } else {
+        throw new Error('Copy operation failed');
+      }
     } catch (err) {
       toast({
-        title: "Failed to copy",
-        description: "Could not copy address to clipboard",
+        title: "Copy failed",
+        description: "Could not copy address. Please copy manually from the address shown above.",
         variant: "destructive",
       });
     }
@@ -66,17 +72,31 @@ const AddressDisplay = ({ stellarAddress, walletLoading, onRetryAddress }: Addre
                 <p className="text-muted-foreground text-sm">Generating your address...</p>
               </div>
             ) : stellarAddress?.error ? (
-              <div className="space-y-2">
-                <p className="text-destructive text-sm">{stellarAddress.error}</p>
-                <Button 
-                  onClick={handleRetry}
-                  size="sm"
-                  variant="outline"
-                  className="text-xs"
-                >
-                  <RefreshCw className="w-3 h-3 mr-1" />
-                  Retry
-                </Button>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <p className="text-destructive text-sm font-semibold">{stellarAddress.error}</p>
+                  {stellarAddress.details && (
+                    <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3">
+                      <p className="text-destructive/80 text-xs whitespace-pre-line">{stellarAddress.details}</p>
+                    </div>
+                  )}
+                  {stellarAddress.suggestion && (
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-md p-3">
+                      <p className="text-blue-400 text-xs">💡 {stellarAddress.suggestion}</p>
+                    </div>
+                  )}
+                </div>
+                {!stellarAddress.details && (
+                  <Button 
+                    onClick={handleRetry}
+                    size="sm"
+                    variant="outline"
+                    className="text-xs"
+                  >
+                    <RefreshCw className="w-3 h-3 mr-1" />
+                    Retry
+                  </Button>
+                )}
               </div>
             ) : address ? (
               <p className="text-primary font-mono text-sm break-all">{address}</p>

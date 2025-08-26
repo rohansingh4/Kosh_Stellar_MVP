@@ -30,6 +30,9 @@ const AuthenticatedApp = () => {
   // Global state for price data
   const [priceData, setPriceData] = useState<any>(null);
   const [priceLoading, setPriceLoading] = useState(false);
+  
+  // Network switching state
+  const [selectedNetwork, setSelectedNetwork] = useState("stellar-testnet");
 
   useEffect(() => {
     fetchPriceData();
@@ -45,6 +48,25 @@ const AuthenticatedApp = () => {
     } finally {
       setPriceLoading(false);
     }
+  };
+
+  const handleNetworkChange = (network: string) => {
+    setSelectedNetwork(network);
+    console.log('Network switched to:', network);
+  };
+
+  // Convert network names to backend format
+  const getNetworkType = (network: string) => {
+    return network === "stellar-mainnet" ? "mainnet" : "testnet";
+  };
+
+  // Wrapped functions that include network parameter
+  const buildAndSubmitTransactionWithNetwork = (destination: string, amount: string) => {
+    return buildAndSubmitTransaction(destination, amount, getNetworkType(selectedNetwork));
+  };
+
+  const getAccountBalanceWithNetwork = (address?: string) => {
+    return getAccountBalance(address, getNetworkType(selectedNetwork));
   };
 
   if (loading) {
@@ -74,8 +96,10 @@ const AuthenticatedApp = () => {
               stellarAddress,
               logout,
               getStellarAddress,
-              buildAndSubmitTransaction,
-              getAccountBalance,
+              buildAndSubmitTransaction: buildAndSubmitTransactionWithNetwork,
+              getAccountBalance: getAccountBalanceWithNetwork,
+              selectedNetwork,
+              onNetworkChange: handleNetworkChange,
             }}
             priceData={{
               data: priceData,

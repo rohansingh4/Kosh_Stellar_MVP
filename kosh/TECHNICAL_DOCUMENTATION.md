@@ -126,7 +126,7 @@ async fn public_key_stellar() -> Result<String, String> {
         derivation_path: vec![ic_cdk::api::caller().as_slice().to_vec()],
         key_id: SchnorrKeyId {
             algorithm: SchnorrAlgorithm::Ed25519,
-            name: String::from("dfx_test_key"),
+            name: String::from("test_key_1"),
         },
     };
     
@@ -225,7 +225,7 @@ async fn sign_transaction_stellar(xdr_base64: String) -> Result<String, String> 
         derivation_path: vec![ic_cdk::api::caller().as_slice().to_vec()],
         key_id: SchnorrKeyId {
             algorithm: SchnorrAlgorithm::Ed25519,
-            name: String::from("dfx_test_key"),
+            name: String::from("test_key_1"),
         },
     };
     

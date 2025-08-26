@@ -9,11 +9,6 @@ type TransformArgs = record { context : blob; response : HttpResponse };
 service : {
   build_stellar_transaction : (text, nat64, opt text) -> (Result);
   get_account_balance : (opt text) -> (Result);
-  get_swap_quote : (text, text, text, opt text) -> (Result);
-  execute_token_swap : (text, text, text, nat64, text, opt text) -> (Result);
-  create_trustline : (text, text, opt text, opt text) -> (Result);
-  get_account_assets : (opt text) -> (Result);
-  check_trustline : (text, text, opt text) -> (Result);
   greet : (text) -> (text) query;
   public_key_stellar : () -> (Result);
   transform_http_response : (TransformArgs) -> (HttpResponse) query;
