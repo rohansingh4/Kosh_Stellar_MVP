@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Globe, Menu, Copy, Check } from "lucide-react";
+import { Globe, Menu, Copy, Check, MessageSquare, Star, Info, HelpCircle, Network } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface WalletHeaderProps {
@@ -129,8 +129,70 @@ export const WalletHeader = ({ principal, onLogout, selectedNetwork = "stellar-t
                   </div>
                 </div>
 
-                {/* Logout Section */}
+                {/* Additional Options */}
                 <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-foreground">More</h4>
+                  <div className="space-y-2">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start gap-2 text-sm"
+                      onClick={() => {
+                        // Add about functionality
+                        console.log('About clicked');
+                        setShowSettings(false);
+                      }}
+                    >
+                      <Info className="w-4 h-4" />
+                      About
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start gap-2 text-sm"
+                      onClick={() => {
+                        // Add help functionality
+                        console.log('Help clicked');
+                        setShowSettings(false);
+                      }}
+                    >
+                      <HelpCircle className="w-4 h-4" />
+                      Help
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start gap-2 text-sm"
+                      onClick={() => {
+                        // Add network functionality
+                        console.log('Network settings clicked');
+                        setShowSettings(false);
+                      }}
+                    >
+                      <Network className="w-4 h-4" />
+                      Network Settings
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start gap-2 text-sm"
+                      onClick={() => window.open('https://mykosh.app/', '_blank', 'noopener,noreferrer')}
+                    >
+                      <Star className="w-4 h-4" />
+                      What's New
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start gap-2 text-sm"
+                      onClick={() => {
+                        window.location.href = 'mailto:support@mykosh.app?subject=Feedback%20on%20Kosh%20Stellar%20Wallet';
+                        setShowSettings(false);
+                      }}
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      Leave Feedback
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Logout Section */}
+                <div className="space-y-3 pt-4 border-t border-border/10">
                   <h4 className="text-sm font-semibold text-foreground">Account</h4>
                   <div className="space-y-2">
                     <p className="text-xs text-muted-foreground">
