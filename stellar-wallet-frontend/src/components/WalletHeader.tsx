@@ -78,11 +78,13 @@ export const WalletHeader = ({ principal, onLogout, selectedNetwork = "stellar-t
           </Button>
         </div>
         
-        {/* Center: KOSH Brand */}
+        {/* Center: KOSH Logo */}
         <div className="flex items-center justify-center">
-          <div className="text-primary font-bold text-lg animate-float">
-            Kosh Stellar Wallet
-          </div>
+          <img 
+            src="/logo-rbg.png" 
+            alt="Kosh Stellar Wallet"
+            className="h-10 w-auto object-contain animate-float"
+          />
         </div>
         
         {/* Right: Settings */}
