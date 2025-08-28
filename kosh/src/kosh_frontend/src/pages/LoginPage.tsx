@@ -7,9 +7,14 @@ interface LoginPageProps {
 }
 
 const LoginPage = ({ onLogin }: LoginPageProps) => {
-  // Always use Internet Identity 2.0
+  // Use local Internet Identity for development
   useEffect(() => {
-    localStorage.setItem('FORCE_II_2_0', 'true');
+    // Only force production II when not in development
+    if (window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1') {
+      localStorage.removeItem('FORCE_II_2_0'); // Use local II
+    } else {
+      localStorage.setItem('FORCE_II_2_0', 'true'); // Use production II only on mainnet
+    }
   }, []);
 
   return (
@@ -43,7 +48,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             <div className="space-y-2">
               <h1 className="text-4xl font-bold text-white">KOSH Wallet</h1>
               <p className="text-gray-300 text-lg">
-                Your keyless crypto wallet powered by Internet Identity 2.0 and threshold cryptography
+                Your keyless crypto wallet powered by Internet Identity 1.0 and threshold cryptography
               </p>
             </div>
           </div>
@@ -53,7 +58,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             <div className="flex items-center space-x-2">
               <span className="text-crypto-teal text-xl">✨</span>
               <div className="text-sm text-crypto-teal">
-                <div className="font-semibold">Internet Identity 2.0</div>
+                <div className="font-semibold">Internet Identity 1.0</div>
                 <div className="text-xs text-crypto-teal/80">Secure passkey authentication</div>
               </div>
             </div>

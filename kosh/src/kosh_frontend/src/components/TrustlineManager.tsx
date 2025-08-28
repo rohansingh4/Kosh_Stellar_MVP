@@ -65,7 +65,9 @@ const TrustlineManager = ({ actor, selectedNetwork, stellarAddress, onTrustlineC
   const { toast } = useToast();
 
   const getNetworkType = (network: string) => {
-    return network === "stellar-mainnet" ? "mainnet" : "testnet";
+    if (network === "stellar-mainnet") return "mainnet";
+    if (network === "base-mainnet") return "base";
+    return "testnet";
   };
 
   const handlePopularAssetSelect = (assetId: string) => {

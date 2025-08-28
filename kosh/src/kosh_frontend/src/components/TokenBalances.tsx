@@ -31,7 +31,9 @@ const TokenBalances = ({ actor, selectedNetwork, onAddTrustline, stellarAddress 
   const { toast } = useToast();
 
   const getNetworkType = (network: string) => {
-    return network === "stellar-mainnet" ? "mainnet" : "testnet";
+    if (network === "stellar-mainnet") return "mainnet";
+    if (network === "base-mainnet") return "base";
+    return "testnet";
   };
 
   const fetchAssets = async () => {

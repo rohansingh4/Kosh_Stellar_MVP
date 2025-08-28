@@ -63,7 +63,9 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
   const { toast } = useToast();
 
   const getNetworkType = (network: string) => {
-    return network === "stellar-mainnet" ? "mainnet" : "testnet";
+    if (network === "stellar-mainnet") return "mainnet";
+    if (network === "base-mainnet") return "base";
+    return "testnet";
   };
 
   const checkTrustline = async (assetCode: string, assetIssuer: string) => {

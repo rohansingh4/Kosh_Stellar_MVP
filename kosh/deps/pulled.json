@@ -1,0 +1,22 @@
+{
+  "canisters": {
+    "rdmx6-jaaaa-aaaaa-aaadq-cai": {
+      "name": "internet-identity",
+      "wasm_hash": "e43612c989c35899308361d366d933c3b3af9669c9145ce6020d37fa36cc404f",
+      "wasm_hash_download": "e43612c989c35899308361d366d933c3b3af9669c9145ce6020d37fa36cc404f",
+      "init_guide": "Use '(null)' for sensible defaults. See the candid interface for more details.",
+      "init_arg": "(opt record { captcha_config = opt record { max_unsolved_captchas= 50:nat64; captcha_trigger = variant {Static = variant {CaptchaDisabled}}}})",
+      "candid_args": "(opt InternetIdentityInit)",
+      "gzip": true
+    },
+    "7hfb6-caaaa-aaaar-qadga-cai": {
+      "name": "evm_rpc",
+      "wasm_hash": "53ff4625ad3990f22ab8ee1cee85b6ab43cb623e0ca28d3162c41cfac55bd1a6",
+      "wasm_hash_download": "53ff4625ad3990f22ab8ee1cee85b6ab43cb623e0ca28d3162c41cfac55bd1a6",
+      "init_guide": "https://internetcomputer.org/docs/current/developer-docs/multi-chain/ethereum/evm-rpc/evm-rpc-canister",
+      "init_arg": null,
+      "candid_args": "(InstallArgs)",
+      "gzip": true
+    }
+  }
+}
