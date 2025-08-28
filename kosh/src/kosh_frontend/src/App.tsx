@@ -68,7 +68,7 @@ const AuthenticatedApp = () => {
   };
 
   const getAccountBalanceWithNetwork = (address?: string) => {
-    return getAccountBalance(address, getNetworkType(selectedNetwork));
+    return getAccountBalance(getNetworkType(selectedNetwork));
   };
 
   if (loading) {

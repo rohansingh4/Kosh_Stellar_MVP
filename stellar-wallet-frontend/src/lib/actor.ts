@@ -40,7 +40,7 @@ const getHost = () => {
 export const HOST = getHost();
 
 // Create authenticated actor
-export const createActor = (canisterId: string, options: {
+export const createActor = async (canisterId: string, options: {
   identity?: Identity;
   agent?: HttpAgent;
 }) => {
@@ -49,12 +49,16 @@ export const createActor = (canisterId: string, options: {
     identity: options.identity,
   });
 
-  // For local development, fetch root key
+  // For local development, fetch root key synchronously
   if (HOST.includes('localhost')) {
-    agent.fetchRootKey().catch(err => {
+    try {
+      await agent.fetchRootKey();
+      console.log("Root key fetched successfully");
+    } catch (err) {
       console.warn("Unable to fetch root key. Check to ensure that your local replica is running");
       console.error(err);
-    });
+      throw new Error("Failed to fetch root key for local development");
+    }
   }
 
   return Actor.createActor<_SERVICE>(idlFactory, {
