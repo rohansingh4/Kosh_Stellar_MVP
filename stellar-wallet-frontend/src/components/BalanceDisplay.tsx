@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, RefreshCw, Eye, EyeOff, Copy, Check } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { Loader2, RefreshCw, Eye, EyeOff } from "lucide-react"
+// import { useToast } from "@/hooks/use-toast"
 
 interface BalanceDisplayProps {
   stellarAddress: { stellar_address: string } | null
@@ -14,29 +14,29 @@ export const BalanceDisplay = ({ stellarAddress, getAccountBalance, network }: B
   const [balance, setBalance] = useState<string>("")
   const [loading, setLoading] = useState(false)
   const [showBalance, setShowBalance] = useState(true)
-  const [copied, setCopied] = useState(false)
-  const { toast } = useToast()
+  // const [_, setCopied] = useState(false)
+  // const { toast } = useToast()
 
-  const handleCopy = async () => {
-    if (!stellarAddress?.stellar_address) return
+  // const handleCopy = async () => {
+  //   if (!stellarAddress?.stellar_address) return
     
-    try {
-      await navigator.clipboard.writeText(stellarAddress.stellar_address)
-      setCopied(true)
-      toast({
-        title: "Address copied!",
-        description: "Stellar address copied to clipboard",
-      })
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy address:', err)
-      toast({
-        title: "Failed to copy",
-        description: "Could not copy address to clipboard",
-        variant: "destructive",
-      })
-    }
-  }
+  //   try {
+  //     await navigator.clipboard.writeText(stellarAddress.stellar_address)
+  //     setCopied(true)
+  //     toast({
+  //       title: "Address copied!",
+  //       description: "Stellar address copied to clipboard",
+  //     })
+  //     setTimeout(() => setCopied(false), 2000)
+  //   } catch (err) {
+  //     console.error('Failed to copy address:', err)
+  //     toast({
+  //       title: "Failed to copy",
+  //       description: "Could not copy address to clipboard",
+  //       variant: "destructive",
+  //     })
+  //   }
+  // }
 
   const fetchBalance = async () => {
     if (!stellarAddress) return

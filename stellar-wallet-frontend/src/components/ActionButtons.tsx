@@ -546,22 +546,49 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
 
       {/* Trustline Manager Modal */}
       <Dialog open={showTrustlineModal} onOpenChange={setShowTrustlineModal}>
-        <DialogContent className="bg-card/95 backdrop-blur-sm border-border/20 max-w-md">
-          <DialogHeader>
-            <DialogTitle>Manage Trustlines</DialogTitle>
+        <DialogContent className="bg-card/95 backdrop-blur-sm border-border/20 max-w-md w-[calc(100%-2rem)] sm:w-full max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute left-4 top-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setShowTrustlineModal(false);
+                setShowTokensModal(true);
+              }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+              </svg>
+              <span className="sr-only">Back</span>
+            </Button>
+            <DialogTitle className="text-center">Manage Trustlines</DialogTitle>
           </DialogHeader>
-          <TrustlineManager
-            actor={actor}
-            stellarAddress={stellarAddress}
-            selectedNetwork={selectedNetwork}
-            onTrustlineCreated={() => {
-              setShowTrustlineModal(false);
-              // Refresh token balances if they're open
-              if (onRefreshBalance) {
-                onRefreshBalance();
-              }
-            }}
-          />
+          <div className="px-1 py-2">
+            <TrustlineManager
+              actor={actor}
+              stellarAddress={stellarAddress}
+              selectedNetwork={selectedNetwork}
+              onTrustlineCreated={() => {
+                setShowTrustlineModal(false);
+                // Refresh token balances if they're open
+                if (onRefreshBalance) {
+                  onRefreshBalance();
+                }
+              }}
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </>
