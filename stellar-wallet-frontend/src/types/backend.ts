@@ -16,23 +16,13 @@ export interface _SERVICE {
     { 'Ok' : string } |
       { 'Err' : string }
   >,
+  'execute_bridge_lock' : ActorMethod<
+    [string, string, bigint, string, string, [] | [string]],
+    { 'Ok' : string } |
+      { 'Err' : string }
+  >,
   'execute_token_swap' : ActorMethod<
     [string, string, string, bigint, string, [] | [string]],
-    { 'Ok' : string } |
-      { 'Err' : string }
-  >,
-  'get_account_assets' : ActorMethod<
-    [[] | [string]],
-    { 'Ok' : string } |
-      { 'Err' : string }
-  >,
-  'get_account_balance' : ActorMethod<
-    [[] | [string]],
-    { 'Ok' : string } |
-      { 'Err' : string }
-  >,
-  'get_swap_quote' : ActorMethod<
-    [string, string, string, [] | [string]],
     { 'Ok' : string } |
       { 'Err' : string }
   >,
@@ -61,23 +51,13 @@ export const idlFactory = ({ IDL }: any) => {
         [IDL.Variant({ 'Ok' : IDL.Text, 'Err' : IDL.Text })],
         [],
       ),
+    'execute_bridge_lock' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Nat64, IDL.Text, IDL.Text, IDL.Opt(IDL.Text)],
+        [IDL.Variant({ 'Ok' : IDL.Text, 'Err' : IDL.Text })],
+        [],
+      ),
     'execute_token_swap' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Nat64, IDL.Text, IDL.Opt(IDL.Text)],
-        [IDL.Variant({ 'Ok' : IDL.Text, 'Err' : IDL.Text })],
-        [],
-      ),
-    'get_account_assets' : IDL.Func(
-        [IDL.Opt(IDL.Text)],
-        [IDL.Variant({ 'Ok' : IDL.Text, 'Err' : IDL.Text })],
-        [],
-      ),
-    'get_account_balance' : IDL.Func(
-        [IDL.Opt(IDL.Text)],
-        [IDL.Variant({ 'Ok' : IDL.Text, 'Err' : IDL.Text })],
-        [],
-      ),
-    'get_swap_quote' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text, IDL.Opt(IDL.Text)],
         [IDL.Variant({ 'Ok' : IDL.Text, 'Err' : IDL.Text })],
         [],
       ),

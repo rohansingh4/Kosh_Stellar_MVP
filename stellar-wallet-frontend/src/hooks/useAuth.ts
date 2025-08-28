@@ -4,6 +4,7 @@ import { Identity } from '@dfinity/agent';
 import { Principal } from '@dfinity/principal';
 import { createActor, CANISTER_IDS, HOST } from '@/lib/actor';
 import { _SERVICE } from '@/types/backend';
+import { getAccountBalance as stellarGetAccountBalance } from '@/lib/stellarApi';
 
 interface StellarAddress {
   stellar_address: string;
@@ -36,22 +37,43 @@ export const useAuth = () => {
 
   // Load cached address for the current user when authenticated
   useEffect(() => {
-    if (authState.principal) {
+    if (authState.principal && authState.actor) {
       const cacheKey = `kosh_stellar_address_${authState.principal.toString()}`;
       const cachedAddress = localStorage.getItem(cacheKey);
       
       if (cachedAddress) {
         try {
           const parsed = JSON.parse(cachedAddress);
-          setAuthState(prev => ({ ...prev, stellarAddress: parsed }));
-          console.log('Loaded cached address for user:', authState.principal.toString(), parsed.stellar_address);
+          
+          // Verify cached address matches backend
+          authState.actor.public_key_stellar().then(result => {
+            if ('Ok' in result) {
+              const backendAddress = result.Ok;
+              if (parsed.stellar_address === backendAddress) {
+                setAuthState(prev => ({ ...prev, stellarAddress: parsed }));
+                console.log('Loaded verified cached address for user:', authState.principal?.toString(), parsed.stellar_address);
+              } else {
+                console.warn('Cached address mismatch! Cached:', parsed.stellar_address, 'Backend:', backendAddress);
+                localStorage.removeItem(cacheKey);
+                // Generate fresh address
+                generateStellarAddress();
+              }
+            }
+          }).catch(error => {
+            console.error('Failed to verify cached address:', error);
+            localStorage.removeItem(cacheKey);
+            generateStellarAddress();
+          });
         } catch (error) {
           console.warn('Failed to parse cached address:', error);
           localStorage.removeItem(cacheKey);
         }
+      } else {
+        // No cached address, generate fresh one
+        generateStellarAddress();
       }
     }
-  }, [authState.principal]);
+  }, [authState.principal, authState.actor]);
 
   useEffect(() => {
     initializeAuth();
@@ -81,29 +103,37 @@ export const useAuth = () => {
         console.log('Principal:', userPrincipal.toString());
         
         // Create authenticated actor
-        const authenticatedActor = createActor(CANISTER_IDS.BACKEND, {
-          identity,
-        });
-        
-        setAuthState(prev => ({
-          ...prev,
-          identity,
-          principal: userPrincipal,
-          actor: authenticatedActor,
-        }));
-        
-        console.log('Actor created successfully');
-        
-        // Auto-generate address if not cached for this user
-        const userPrincipalStr = userPrincipal.toString();
-        const cacheKey = `kosh_stellar_address_${userPrincipalStr}`;
-        const cachedAddress = localStorage.getItem(cacheKey);
-        
-        if (!cachedAddress) {
-          console.log('No cached address found for user, generating new address...');
-          setTimeout(() => {
-            generateStellarAddress(authenticatedActor, userPrincipalStr);
-          }, 100);
+        try {
+          const authenticatedActor = await createActor(CANISTER_IDS.BACKEND, {
+            identity,
+          });
+          
+          setAuthState(prev => ({
+            ...prev,
+            identity,
+            principal: userPrincipal,
+            actor: authenticatedActor,
+          }));
+          
+          console.log('Actor created successfully');
+          
+          // Auto-generate address if not cached for this user
+          const userPrincipalStr = userPrincipal.toString();
+          const cacheKey = `kosh_stellar_address_${userPrincipalStr}`;
+          const cachedAddress = localStorage.getItem(cacheKey);
+          
+          if (!cachedAddress) {
+            console.log('No cached address found for user, generating new address...');
+            setTimeout(() => {
+              generateStellarAddress(authenticatedActor, userPrincipalStr);
+            }, 100);
+          }
+        } catch (actorError) {
+          console.error('Failed to create actor:', actorError);
+          setAuthState(prev => ({
+            ...prev,
+            stellarAddress: { stellar_address: `Error creating actor: ${actorError}` }
+          }));
         }
       }
     } catch (error) {
@@ -169,7 +199,7 @@ export const useAuth = () => {
           
           try {
             // Create authenticated actor with better error handling
-            const authenticatedActor = createActor(CANISTER_IDS.BACKEND, {
+            const authenticatedActor = await createActor(CANISTER_IDS.BACKEND, {
               identity,
             });
             
@@ -392,24 +422,17 @@ export const useAuth = () => {
   };
 
   const getAccountBalance = async (network = 'testnet') => {
-    if (!authState.actor) {
-      throw new Error('Backend actor not available');
+    if (!authState.stellarAddress) {
+      throw new Error('Stellar address not available');
     }
     
     try {
-      console.log('Fetching balance from backend canister for network:', network);
-      const result = await authState.actor.get_account_balance([network]);
-      console.log('Backend balance response:', result);
-      
-      if ('Ok' in result) {
-        const balance = result.Ok;
-        console.log('Balance fetched successfully:', balance);
-        return balance;
-      } else {
-        throw new Error(result.Err);
-      }
+      console.log('Fetching balance directly from Stellar API for network:', network);
+      const balance = await stellarGetAccountBalance(authState.stellarAddress.stellar_address, network);
+      console.log('Stellar API balance response:', balance);
+      return balance;
     } catch (error) {
-      console.error('Failed to get account balance from backend:', error);
+      console.error('Failed to get account balance from Stellar API:', error);
       throw error;
     }
   };

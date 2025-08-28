@@ -23,6 +23,7 @@ import SwapComponent from "./SwapComponent";
 import TokenBalances from "./TokenBalances";
 import TrustlineManager from "./TrustlineManager";
 import QRCode from 'qrcode';
+import { executeBridgeTransaction, getSupportedChains, getSupportedTokens } from "@/lib/bridgeService";
 
 interface ActionButtonsProps {
   stellarAddress?: any;
@@ -38,15 +39,30 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [showTokensModal, setShowTokensModal] = useState(false);
   const [showTrustlineModal, setShowTrustlineModal] = useState(false);
+  const [showBridgeModal, setShowBridgeModal] = useState(false);
   const [sendForm, setSendForm] = useState({ destination: '', amount: '' });
+  const [bridgeForm, setBridgeForm] = useState({ 
+    fromTokenAddress: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC', // Default token
+    destToken: 'ETH',
+    amount: '',
+    destChain: '6565', // Default to ETH chain
+    recipientAddress: ''
+  });
   const [transactionLoading, setTransactionLoading] = useState(false);
+  const [bridgeLoading, setBridgeLoading] = useState(false);
   const [transactionProgress, setTransactionProgress] = useState(0);
+  const [bridgeProgress, setBridgeProgress] = useState(0);
   const [transactionResult, setTransactionResult] = useState<any>(null);
+  const [bridgeResult, setBridgeResult] = useState<any>(null);
   const [copied, setCopied] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
   const { toast } = useToast();
 
-  // Progress simulation effect
+  // Get supported chains and tokens for bridge
+  const supportedChains = getSupportedChains();
+  const supportedTokens = getSupportedTokens();
+
+  // Progress simulation effect for transactions
   useEffect(() => {
     if (transactionLoading) {
       setTransactionProgress(0);
@@ -64,6 +80,25 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
       return () => clearInterval(progressInterval);
     }
   }, [transactionLoading]);
+
+  // Progress simulation effect for bridge
+  useEffect(() => {
+    if (bridgeLoading) {
+      setBridgeProgress(0);
+      setBridgeResult(null);
+      const progressInterval = setInterval(() => {
+        setBridgeProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 800);
+
+      return () => clearInterval(progressInterval);
+    }
+  }, [bridgeLoading]);
 
   // Generate QR code when address is available
   useEffect(() => {
@@ -169,6 +204,86 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
     }
   };
 
+  const handleBridgeTransaction = async () => {
+    if (!bridgeForm.amount || !bridgeForm.recipientAddress || !bridgeForm.destChain) {
+      toast({
+        title: "Invalid input",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!stellarAddress?.stellar_address) {
+      toast({
+        title: "Address not available",
+        description: "Stellar address is required for bridge operations",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setBridgeLoading(true);
+    setBridgeProgress(0);
+    setBridgeResult(null);
+    
+    try {
+      console.log('🔒 Starting bridge transaction...');
+      
+      const lockParams = {
+        userAddress: stellarAddress.stellar_address,
+        fromTokenAddress: bridgeForm.fromTokenAddress,
+        destToken: bridgeForm.destToken,
+        amount: parseFloat(bridgeForm.amount),
+        destChain: bridgeForm.destChain,
+        recipientAddress: bridgeForm.recipientAddress
+      };
+
+      // Execute bridge transaction using service (with backend integration)
+      const result = await executeBridgeTransaction(
+        lockParams,
+        selectedNetwork || 'testnet',
+        setBridgeProgress,
+        actor // Pass actor for backend integration
+      );
+      
+      setBridgeResult(result);
+      
+      toast({
+        title: "Bridge successful!",
+        description: `Bridging ${bridgeForm.amount} ${bridgeForm.destToken} to ${result.bridgeDetails?.toChain}`,
+      });
+      
+      // Close modal after delay
+      setTimeout(() => {
+        setBridgeForm({ 
+          fromTokenAddress: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+          destToken: 'ETH',
+          amount: '',
+          destChain: '6565',
+          recipientAddress: ''
+        });
+        setBridgeResult(null);
+        setShowBridgeModal(false);
+      }, 5000);
+      
+    } catch (error: any) {
+      console.error('Bridge error:', error);
+      setBridgeProgress(0);
+      setBridgeResult({ 
+        success: false, 
+        message: error.message || "Bridge transaction failed" 
+      });
+      toast({
+        title: "Bridge failed",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setBridgeLoading(false);
+    }
+  };
+
   const showComingSoon = (feature: string) => {
     toast({
       title: "Coming Soon!",
@@ -214,8 +329,8 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
       icon: GitBranch,
       gradient: "from-indigo-500 to-purple-500",
       hoverGradient: "hover:from-indigo-500/80 hover:to-purple-500/80",
-      onClick: () => showComingSoon("Bridge"),
-      disabled: false
+      onClick: () => setShowBridgeModal(true),
+      disabled: !stellarAddress?.stellar_address
     }
   ];
 
@@ -591,8 +706,227 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Bridge Modal */}
+      <Dialog open={showBridgeModal} onOpenChange={setShowBridgeModal}>
+        <DialogContent className="bg-card/95 backdrop-blur-sm border-border/20 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitBranch className="w-5 h-5 text-indigo-500" />
+              Bridge Tokens
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {!bridgeResult ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="fromToken">From Token Address</Label>
+                  <Input
+                    id="fromToken"
+                    value={bridgeForm.fromTokenAddress}
+                    onChange={(e) => setBridgeForm({...bridgeForm, fromTokenAddress: e.target.value})}
+                    placeholder="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+                    className="bg-card/50 border-border/20 font-mono text-xs"
+                    disabled={bridgeLoading}
+                  />
+                  <p className="text-xs text-muted-foreground">Stellar token contract address</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="destToken">Destination Token</Label>
+                    <select
+                      id="destToken"
+                      value={bridgeForm.destToken}
+                      onChange={(e) => setBridgeForm({...bridgeForm, destToken: e.target.value})}
+                      className="w-full px-3 py-2 bg-card/50 border border-border/20 rounded-md text-sm disabled:opacity-50"
+                      disabled={bridgeLoading}
+                    >
+                      {supportedTokens.map((token) => (
+                        <option key={token.symbol} value={token.symbol}>
+                          {token.symbol} - {token.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="destChain">Destination Chain</Label>
+                    <select
+                      id="destChain"
+                      value={bridgeForm.destChain}
+                      onChange={(e) => setBridgeForm({...bridgeForm, destChain: e.target.value})}
+                      className="w-full px-3 py-2 bg-card/50 border border-border/20 rounded-md text-sm disabled:opacity-50"
+                      disabled={bridgeLoading}
+                    >
+                      {supportedChains.map((chain) => (
+                        <option key={chain.id} value={chain.id}>
+                          {chain.icon} {chain.name} ({chain.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="bridgeAmount">Amount</Label>
+                  <Input
+                    id="bridgeAmount"
+                    type="number"
+                    value={bridgeForm.amount}
+                    onChange={(e) => setBridgeForm({...bridgeForm, amount: e.target.value})}
+                    placeholder="0.00"
+                    step="0.0000001"
+                    min="0"
+                    className="bg-card/50 border-border/20"
+                    disabled={bridgeLoading}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="recipientAddress">Recipient Address</Label>
+                  <Input
+                    id="recipientAddress"
+                    value={bridgeForm.recipientAddress}
+                    onChange={(e) => setBridgeForm({...bridgeForm, recipientAddress: e.target.value})}
+                    placeholder="0x8Da1867ab5eE5385dc72f5901bC9Bd16F580d157"
+                    className="bg-card/50 border-border/20 font-mono text-xs"
+                    disabled={bridgeLoading}
+                  />
+                  <p className="text-xs text-muted-foreground">Destination chain wallet address</p>
+                </div>
+
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 shrink-0"></div>
+                    <div className="text-sm text-amber-700 dark:text-amber-300">
+                      <p className="font-semibold mb-1">Bridge Notice</p>
+                      <p>This will lock your tokens on Stellar and mint equivalent tokens on the destination chain. Bridge fees may apply.</p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : null}
+
+            {/* Bridge Progress Bar */}
+            {bridgeLoading && (
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span className="text-sm text-muted-foreground">Processing bridge transaction...</span>
+                </div>
+                <Progress value={bridgeProgress} className="w-full" />
+                <p className="text-xs text-center text-muted-foreground">
+                  {bridgeProgress < 25 ? 'Preparing lock transaction...' :
+                   bridgeProgress < 50 ? 'Building Soroban contract call...' :
+                   bridgeProgress < 75 ? 'Signing with threshold cryptography...' :
+                   bridgeProgress < 90 ? 'Submitting to Stellar network...' :
+                   'Finalizing bridge...'}
+                </p>
+              </div>
+            )}
+
+            {/* Bridge Result */}
+            {bridgeResult && (
+              <div className="space-y-4">
+                {bridgeResult.success ? (
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                      <span className="font-semibold text-green-500">Bridge Successful!</span>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div className="bg-card/30 rounded-lg p-3 space-y-2">
+                        <h4 className="font-semibold text-sm">Bridge Details</h4>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-muted-foreground">From:</span>
+                            <p className="font-medium">{bridgeResult.bridgeDetails.fromChain}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">To:</span>
+                            <p className="font-medium">{bridgeResult.bridgeDetails.toChain}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Amount:</span>
+                            <p className="font-medium">{bridgeResult.bridgeDetails.amount} {bridgeResult.bridgeDetails.token}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Recipient:</span>
+                            <p className="font-mono text-xs break-all">{bridgeResult.bridgeDetails.recipient}</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {bridgeResult.hash && (
+                        <>
+                          <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground">Transaction Hash:</p>
+                            <div className="bg-card/30 rounded p-2">
+                              <p className="font-mono text-xs break-all text-primary">
+                                {bridgeResult.hash}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {bridgeResult.explorer_url && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => window.open(bridgeResult.explorer_url, '_blank')}
+                              className="w-full"
+                            >
+                              <ExternalLink className="w-4 h-4 mr-2" />
+                              View on Explorer
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    
+                    <p className="text-sm text-muted-foreground">
+                      Modal will close automatically in a few seconds...
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-red-500">❌</span>
+                      <span className="font-semibold text-red-500">Bridge Failed</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      {bridgeResult.message}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!bridgeResult && (
+              <div className="flex gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowBridgeModal(false)}
+                  className="flex-1"
+                  disabled={bridgeLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleBridgeTransaction}
+                  disabled={bridgeLoading || !bridgeForm.amount || !bridgeForm.recipientAddress}
+                  className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600"
+                >
+                  {bridgeLoading ? 'Bridging...' : 'Bridge Tokens'}
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
 
-export default ActionButtons;
+export default ActionButton

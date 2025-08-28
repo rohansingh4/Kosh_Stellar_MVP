@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AuthClient } from '@dfinity/auth-client';
 import { createActor } from 'declarations/kosh_backend';
+import { getAccountBalance as stellarGetAccountBalance } from './lib/stellarApi.js';
 
 // Define canister IDs - automatically detects local vs mainnet
 const getCanisterIds = () => {
@@ -153,6 +154,22 @@ export const useAuth = () => {
           }, 100);
         } else {
           console.log('Using cached address');
+          // Verify cached address matches backend - async verification
+          setTimeout(async () => {
+            try {
+              const backendResult = await authenticatedActor.public_key_stellar();
+              if (backendResult.Ok) {
+                const parsedCache = JSON.parse(cachedAddress);
+                if (backendResult.Ok !== parsedCache.stellar_address) {
+                  console.warn('Cached address mismatch detected, refreshing...');
+                  localStorage.removeItem(cacheKey);
+                  generateStellarAddressAuto(authenticatedActor, userPrincipalStr);
+                }
+              }
+            } catch (error) {
+              console.warn('Address verification failed:', error);
+            }
+          }, 500);
         }
       } else {
         console.log('User is not authenticated');
@@ -424,25 +441,18 @@ export const useAuth = () => {
     }
   };
 
-  const getAccountBalance = async (address, network = 'testnet') => {
-    if (!actor) {
-      throw new Error('Backend actor not available');
+  const getAccountBalance = async (network = 'testnet') => {
+    if (!stellarAddress) {
+      throw new Error('Stellar address not available');
     }
     
     try {
-      console.log('Fetching balance from backend canister for network:', network);
-      const result = await actor.get_account_balance([network]);
-      console.log('Backend balance response:', result);
-      
-      if (result.Ok) {
-        const balance = result.Ok;
-        console.log('Balance fetched successfully:', balance);
-        return balance;
-      } else {
-        throw new Error(result.Err);
-      }
+      console.log('Fetching balance directly from Stellar API for network:', network);
+      const balance = await stellarGetAccountBalance(stellarAddress.stellar_address, network);
+      console.log('Stellar API balance response:', balance);
+      return balance;
     } catch (error) {
-      console.error('Failed to get account balance from backend:', error);
+      console.error('Failed to get account balance from Stellar API:', error);
       throw error;
     }
   };

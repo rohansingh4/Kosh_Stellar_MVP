@@ -43,10 +43,14 @@ const BalanceDisplay = ({
     try {
       const result = await onGetBalance(stellarAddress.stellar_address);
       setBalance(result);
-      toast({
-        title: "Balance updated",
-        description: "Your balance has been refreshed",
-      });
+      
+      // Check if account needs funding - don't show success toast in this case
+      if (result !== "Account needs funding") {
+        toast({
+          title: "Balance updated",
+          description: "Your balance has been refreshed",
+        });
+      }
     } catch (error) {
       console.error('Error refreshing balance:', error);
       toast({
@@ -112,6 +116,36 @@ const BalanceDisplay = ({
               {balanceLoading ? (
                 <div className="flex items-center justify-center gap-2">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : balance === "Account needs funding" ? (
+                <div className="space-y-4">
+                  <div className="text-xl sm:text-2xl text-amber-600 dark:text-amber-400">
+                    Account Needs Funding
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Your account needs to be funded with XLM to become active
+                    </p>
+                    {selectedNetwork === 'testnet' ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open('https://stellar.org/friendbot', '_blank')}
+                        className="text-xs"
+                      >
+                        Get Test XLM
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open('https://stellar.org/learn/fundamentals/stellar-data-structures/accounts#account-creation', '_blank')}
+                        className="text-xs"
+                      >
+                        Learn More
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ) : isVisible ? (
                 <div className="flex items-center justify-center flex-wrap gap-1">

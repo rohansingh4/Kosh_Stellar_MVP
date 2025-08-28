@@ -20,6 +20,7 @@
     "@radix-ui/react-progress": "^1.1.7",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-toast": "^1.2.15",
+    "@stellar/stellar-sdk": "^14.1.1",
     "@tanstack/react-query": "^5.8.4",
     "@types/qrcode": "^1.5.5",
     "class-variance-authority": "^0.7.1",
