@@ -14,6 +14,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 
+use crate::build_stellar_transaction;
 use crate::eth::send_eth_evm;
 use crate::evm_rpc_bindings::{
     BlockTag,
@@ -110,7 +111,7 @@ impl ChainService {
         // Keccak256 hash of the TokenLocked event signature:
         // "TokenLocked(address,address,uint256,uint256,string)"
         let token_locked_event_signature =
-            "0x87b81f46f02c6b7d0bbf8436a6d65c9a5b9b9f38f7d6c72a4a7b4d45a2f3b1c4".to_string();
+            "0xf9285f7a2a0134043e038bd092dc8140e6720d93ed9832e48eb2b5551c9bbf4c".to_string();
 
         // Convert Option<String> to Vec<String> for filtering addresses
         let addresses: Vec<String> = address_filter.into_iter().collect();
@@ -212,7 +213,8 @@ impl ChainService {
                 });
                
                // Pass the amount as-is (in wei)
-               let txn_hash = send_eth_evm(to_address.clone(), amount as f64, dest_chain.clone()).await;
+            //    let txn_hash = send_eth_evm(to_address.clone(), amount as f64, dest_chain.clone()).await;
+               let txn_hash=build_stellar_transaction(to_address.clone(), amount, Some(dest_chain.clone())).await;
                ic_cdk::println!("txn_hash: {:?}", txn_hash);
 
  
@@ -252,74 +254,58 @@ impl ChainService {
         u64,    // srcChainId
         String, // destChain
     )> {
-        // The topics vector should have at least 3 elements: [event signature, from_address, to_address]
-        if topics.len() < 3 {
+        // The topics vector should have at least 2 elements: [event signature, from_address]
+        if topics.len() < 2 {
             return None;
         }
-
-        // Decode from_address from topic[1] (address - last 20 bytes of 32-byte topic)
+    
+        // Decode from_address from topic[1]
         let from_bytes = hex_decode(topics[1].trim_start_matches("0x")).ok()?;
         if from_bytes.len() != 32 {
             return None;
         }
-        let from_addr = &from_bytes[12..32]; // last 20 bytes
+        let from_addr = &from_bytes[12..32];
         let from_address = format!("0x{}", hex::encode(from_addr));
-
-        // Decode to_address from topic[2] (address - last 20 bytes of 32-byte topic)
-        let to_bytes = hex_decode(topics[2].trim_start_matches("0x")).ok()?;
-        if to_bytes.len() != 32 {
-            return None;
-        }
-        let to_addr = &to_bytes[12..32]; // last 20 bytes
-        let to_address = format!("0x{}", hex::encode(to_addr));
-
-        // Decode non-indexed parameters from "data" field
+    
+        // Decode non-indexed parameters: (string to_address, uint256 amount, uint256 srcChainId, string destChain)
         let data_bytes = hex_decode(data.trim_start_matches("0x")).ok()?;
         if data_bytes.is_empty() {
             return None;
         }
-
-        // Order and types correspond to Solidity event non-indexed params:
-        // uint256 amount, uint256 srcChainId, string destChain
+    
         let param_types = vec![
+            ParamType::String,    // to_address
             ParamType::Uint(256), // amount
             ParamType::Uint(256), // srcChainId
             ParamType::String,    // destChain
         ];
-
+    
         let tokens = decode(&param_types, &data_bytes).ok()?;
-
-        let amount = match &tokens[0] {
-            Token::Uint(n) => {
-                // Handle large numbers safely - if it's too big for u64, use a smaller representation
-                if n.bits() > 64 {
-                    ic_cdk::println!("Warning: Amount too large for u64, using truncated value");
-                    // Take the lower 64 bits
-                    (n.low_u64())
-                } else {
-                    n.as_u64()
-                }
-            },
-            _ => return None,
-        };
-        let src_chain_id = match &tokens[1] {
-            Token::Uint(n) => n.as_u64(),
-            _ => return None,
-        };
-        let dest_chain = match &tokens[2] {
+    
+        let to_address = match &tokens[0] {
             Token::String(s) => s.clone(),
             _ => return None,
         };
-
-        Some((
-            from_address,
-            to_address,
-            amount,
-            src_chain_id,
-            dest_chain,
-        ))
+    
+        let amount = match &tokens[1] {
+            Token::Uint(n) => n.low_u64(), // truncate if larger than u64
+            _ => return None,
+        };
+    
+        let src_chain_id = match &tokens[2] {
+            Token::Uint(n) => n.as_u64(),
+            _ => return None,
+        };
+    
+        let dest_chain = match &tokens[3] {
+            Token::String(s) => s.clone(),
+            _ => return None,
+        };
+    
+        Some((from_address, to_address, amount, src_chain_id, dest_chain))
     }
 
+    
     pub async fn fetch_logs(
         &self,
         from_block: u64,
@@ -531,7 +517,7 @@ impl ChainService {
             .fetch_token_locked_logs(
                 from_block,
                 to_block,
-                Some("0xA41AfeA9F9f866Cd1853ba8c09A401c664688fD6".to_string()),
+                Some("0xa667A04fBe2FDFD3d16c14C60EC1C300e7190d85".to_string()),
             )
             .await
         {
