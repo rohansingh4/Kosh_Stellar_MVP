@@ -30,6 +30,8 @@
 
     --success: 174 100% 41%;
     --success-foreground: 220 30% 6%;
+    
+    --crypto-teal: 174 100% 41%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 180 100% 95%;
@@ -144,4 +146,14 @@
   .transition-smooth {
     transition: var(--transition-smooth);
   }
+}
+
+*::-webkit-scrollbar{
+  display: none;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0; /* optional */
 }

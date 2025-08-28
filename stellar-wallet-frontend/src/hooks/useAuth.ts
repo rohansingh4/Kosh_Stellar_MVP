@@ -18,6 +18,7 @@ interface AuthState {
   loading: boolean;
   walletLoading: boolean;
   stellarAddress: StellarAddress | null;
+  error: Error | null;
 }
 
 export const useAuth = () => {
@@ -30,6 +31,7 @@ export const useAuth = () => {
     loading: true,
     walletLoading: false,
     stellarAddress: null,
+    error: null,
   });
 
   // Load cached address for the current user when authenticated
@@ -112,13 +114,24 @@ export const useAuth = () => {
   };
 
   const login = async (authMethod = 'passkey') => {
-    if (!authState.authClient) return;
+    if (!authState.authClient) {
+      console.error('Auth client not initialized');
+      return;
+    }
+    
+    // Prevent multiple login attempts
+    if (authState.loading) return;
     
     try {
       setAuthState(prev => ({ ...prev, loading: true }));
       
       // Clear any cached authentication data that might be causing issues
-      await authState.authClient.logout();
+      try {
+        await authState.authClient.logout();
+      } catch (error) {
+        console.warn('Error during pre-login cleanup:', error);
+        // Continue with login even if logout fails
+      }
       
       // Clear all localStorage entries that might interfere
       const keysToRemove = [];
@@ -186,7 +199,7 @@ export const useAuth = () => {
             }));
           }
         },
-        onError: (error) => {
+        onError: (error: any) => {
           console.error('Authentication error:', error);
           setAuthState(prev => ({
             ...prev,
@@ -198,7 +211,6 @@ export const useAuth = () => {
       // Add Google-specific configuration if using Google auth
       if (authMethod === 'google') {
         loginOptions.derivationOrigin = window.location.origin;
-        loginOptions.windowOpenerFeatures = 'width=500,height=600,scrollbars=yes,resizable=yes';
       }
 
       await authState.authClient.login(loginOptions);
@@ -210,30 +222,57 @@ export const useAuth = () => {
   };
 
   const logout = async () => {
-    if (!authState.authClient) return;
+    if (!authState.authClient) {
+      console.error('Auth client not initialized');
+      return;
+    }
+    
+    // Prevent multiple logout attempts
+    if (authState.loading) return;
     
     try {
       setAuthState(prev => ({ ...prev, loading: true }));
-      await authState.authClient.logout();
       
-      // Clear cached address for this user
+      // Clear cached address for this user first
       if (authState.principal) {
         const cacheKey = `kosh_stellar_address_${authState.principal.toString()}`;
         localStorage.removeItem(cacheKey);
       }
       
-      setAuthState(prev => ({
-        ...prev,
+      // Reset state before logout to prevent UI flicker
+      const resetState = {
         isAuthenticated: false,
         principal: null,
         identity: null,
         actor: null,
+        loading: false,
+        walletLoading: false,
         stellarAddress: null,
+      };
+      
+      // Perform logout
+      try {
+        await authState.authClient.logout();
+      } catch (error) {
+        console.warn('Error during logout:', error);
+        // Continue with state reset even if logout fails
+      }
+      
+      // Update state in a single operation
+      setAuthState(prev => ({
+        ...prev,
+        ...resetState
       }));
+      
     } catch (error) {
       console.error('Logout failed:', error);
-    } finally {
-      setAuthState(prev => ({ ...prev, loading: false }));
+      // Ensure loading is always set to false, even on error
+      setAuthState(prev => ({
+        ...prev,
+        loading: false,
+        walletLoading: false
+      }));
+      throw error; // Re-throw to allow error handling in components
     }
   };
 
@@ -375,6 +414,7 @@ export const useAuth = () => {
     }
   };
 
+  // Add error state to the return value
   return {
     ...authState,
     login,
@@ -382,5 +422,8 @@ export const useAuth = () => {
     generateStellarAddress: () => generateStellarAddress(),
     buildAndSubmitTransaction,
     getAccountBalance,
+    error: authState.stellarAddress?.stellar_address?.startsWith('Error: ') 
+      ? new Error(authState.stellarAddress.stellar_address) 
+      : null,
   };
 };

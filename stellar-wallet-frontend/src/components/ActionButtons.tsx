@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { 
-  ArrowUpRight, 
-  ArrowDownLeft, 
+   
   RefreshCw, 
   GitBranch,
   Send,
@@ -222,24 +221,63 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
 
   return (
     <>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {actions.map((action, index) => (
-          <Card 
-            key={action.label} 
-            className={`p-4 bg-card/50 backdrop-blur-sm border-border/30 hover:border-border/50 transition-all duration-300 cursor-pointer group relative overflow-hidden ${
-              action.disabled ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        {actions.map((action) => (
+          <div 
+            key={action.label}
+            className={`relative group ${action.disabled ? 'opacity-60' : 'hover:opacity-90'}`}
             onClick={action.disabled ? undefined : action.onClick}
           >
-            <div className="flex flex-col items-center gap-3 text-center">
-              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${action.gradient} ${action.hoverGradient} flex items-center justify-center transition-all duration-300 group-hover:scale-110`}>
-                <action.icon className="w-6 h-6 text-white" />
+            <div className={`
+              absolute inset-0 bg-gradient-to-br ${action.gradient} rounded-xl 
+              opacity-0 group-hover:opacity-100 transition-all duration-300 blur-sm -z-10
+              ${action.disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
+            `}></div>
+            
+            <Card 
+              className={`
+                h-full p-2 px-3 sm:px-4 bg-card/70 backdrop-blur-sm border border-border/20 
+                transition-all duration-300 group-hover:border-transparent
+                ${action.disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:shadow-lg hover:shadow-primary/10'}
+                relative overflow-hidden z-0
+              `}
+            >
+              {/* Animated background on hover */}
+              <div className={`
+                absolute inset-0 bg-gradient-to-br ${action.gradient} 
+                opacity-0 group-hover:opacity-5 transition-opacity duration-300 -z-10
+              `}></div>
+              
+              <div className="flex flex-col items-center gap-2 sm:gap-3 text-center">
+                <div 
+                  className={`
+                    w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center 
+                    transition-all duration-300 transform group-hover:scale-110
+                    ${action.disabled ? 'opacity-70' : 'group-hover:shadow-lg'}
+                    ${action.gradient} bg-gradient-to-br
+                  `}
+                >
+                  <action.icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                </div>
+                <span className={`
+                  text-sm sm:text-base font-medium text-foreground 
+                  transition-all duration-300 group-hover:font-semibold
+                  ${action.disabled ? 'text-muted-foreground' : 'group-hover:text-primary'}
+                `}>
+                  {action.label}
+                </span>
               </div>
-              <span className="font-medium text-foreground group-hover:text-primary transition-colors duration-300">
-                {action.label}
-              </span>
-            </div>
-          </Card>
+              
+              {/* Pulse animation on hover */}
+              {!action.disabled && (
+                <div className="
+                  absolute inset-0 rounded-xl ring-1 ring-inset ring-primary/20 
+                  group-hover:ring-primary/40 group-hover:ring-2 transition-all duration-300
+                  opacity-0 group-hover:opacity-100 -z-10
+                "></div>
+              )}
+            </Card>
+          </div>
         ))}
       </div>
 
@@ -445,22 +483,46 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
 
       {/* Trade Modal */}
       <Dialog open={showSwapModal} onOpenChange={setShowSwapModal}>
-        <DialogContent className="bg-card/95 backdrop-blur-sm border-border/20 max-w-md">
-          <DialogHeader>
-            <DialogTitle>Trade</DialogTitle>
+        <DialogContent className="bg-card/95 backdrop-blur-sm border-border/20 max-w-md w-[calc(100%-2rem)] sm:w-full max-h-[90vh] overflow-y-scroll ">
+          <DialogHeader className="relative">
+            <DialogTitle className="text-center">Trade</DialogTitle>
+            {/* <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-4 top-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={() => setShowSwapModal(false)}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+              <span className="sr-only">Close</span>
+            </Button> */}
           </DialogHeader>
-          <SwapComponent
-            actor={actor}
-            stellarAddress={stellarAddress}
-            selectedNetwork={selectedNetwork}
-            onSwapComplete={() => {
-              setShowSwapModal(false);
-              // Refresh balance after swap
-              if (onRefreshBalance) {
-                onRefreshBalance();
-              }
-            }}
-          />
+          <div className="px-1 py-2">
+            <SwapComponent
+              actor={actor}
+              stellarAddress={stellarAddress}
+              selectedNetwork={selectedNetwork}
+              onSwapComplete={() => {
+                setShowSwapModal(false);
+                // Refresh balance after swap
+                if (onRefreshBalance) {
+                  onRefreshBalance();
+                }
+              }}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -484,22 +546,49 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
 
       {/* Trustline Manager Modal */}
       <Dialog open={showTrustlineModal} onOpenChange={setShowTrustlineModal}>
-        <DialogContent className="bg-card/95 backdrop-blur-sm border-border/20 max-w-md">
-          <DialogHeader>
-            <DialogTitle>Manage Trustlines</DialogTitle>
+        <DialogContent className="bg-card/95 backdrop-blur-sm border-border/20 max-w-md w-[calc(100%-2rem)] sm:w-full max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute left-4 top-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setShowTrustlineModal(false);
+                setShowTokensModal(true);
+              }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+              </svg>
+              <span className="sr-only">Back</span>
+            </Button>
+            <DialogTitle className="text-center">Manage Trustlines</DialogTitle>
           </DialogHeader>
-          <TrustlineManager
-            actor={actor}
-            stellarAddress={stellarAddress}
-            selectedNetwork={selectedNetwork}
-            onTrustlineCreated={() => {
-              setShowTrustlineModal(false);
-              // Refresh token balances if they're open
-              if (onRefreshBalance) {
-                onRefreshBalance();
-              }
-            }}
-          />
+          <div className="px-1 py-2">
+            <TrustlineManager
+              actor={actor}
+              stellarAddress={stellarAddress}
+              selectedNetwork={selectedNetwork}
+              onTrustlineCreated={() => {
+                setShowTrustlineModal(false);
+                // Refresh token balances if they're open
+                if (onRefreshBalance) {
+                  onRefreshBalance();
+                }
+              }}
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </>

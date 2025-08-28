@@ -6,6 +6,7 @@ import ActionButtons from "@/components/ActionButtons"
 import { useAuth } from "@/hooks/useAuth"
 import { Loader2 } from "lucide-react"
 import { useState } from "react"
+import { LoginPage } from "./LoginPage"
 
 export const WalletPage = () => {
   const {
@@ -19,6 +20,7 @@ export const WalletPage = () => {
     generateStellarAddress,
     buildAndSubmitTransaction,
     getAccountBalance,
+    login
   } = useAuth()
 
   const [selectedNetwork, setSelectedNetwork] = useState("stellar-testnet")
@@ -35,7 +37,7 @@ export const WalletPage = () => {
   }
 
   if (!isAuthenticated || !principal) {
-    return null // Will be handled by App.tsx
+    return <LoginPage loading={loading} onLogin={login}/>
   }
 
   const handleNetworkChange = (network: string) => {
@@ -67,9 +69,9 @@ export const WalletPage = () => {
       {/* Main content */}
       <div className="relative z-10 max-w-md mx-auto">
         <WalletHeader
-          principal={principal.toString()}
+          principal={principal}
           onLogout={logout}
-          network={selectedNetwork}
+          selectedNetwork={selectedNetwork}
           onNetworkChange={handleNetworkChange}
         />
         
