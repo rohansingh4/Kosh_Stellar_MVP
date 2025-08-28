@@ -67,9 +67,9 @@ export const WalletPage = () => {
       {/* Main content */}
       <div className="relative z-10 max-w-md mx-auto">
         <WalletHeader
-          principal={principal.toString()}
+          principal={principal}
           onLogout={logout}
-          network={selectedNetwork}
+          selectedNetwork={selectedNetwork}
           onNetworkChange={handleNetworkChange}
         />
         

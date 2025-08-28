@@ -20,6 +20,7 @@ export const BalanceDisplay = ({ stellarAddress, getAccountBalance, network }: B
     try {
       setLoading(true)
       const balanceResult = await getAccountBalance()
+      
       setBalance(balanceResult)
     } catch (error) {
       console.error("Failed to fetch balance:", error)
@@ -68,13 +69,34 @@ export const BalanceDisplay = ({ stellarAddress, getAccountBalance, network }: B
       <CardContent>
         <div className="space-y-4">
           <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-            <p className="text-3xl font-bold text-foreground mb-2">
-              {showBalance ? (loading ? "Loading..." : balance) : "••••••"}
-            </p>
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${network === "stellar-testnet" ? "bg-orange-400" : "bg-green-400"}`}></div>
-              Network: {network === "stellar-testnet" ? "Testnet" : "Mainnet"}
-            </p>
+            {showBalance && balance === "Account needs funding" ? (
+              <div className="text-center space-y-3">
+                <p className="text-lg font-semibold text-muted-foreground">
+                  🪙 Account Needs Funding
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Send XLM to your address to activate your account
+                </p>
+                <Button
+                  onClick={() => window.open(network === "testnet" ? "https://friendbot.stellar.org" : "https://stellar.org", "_blank")}
+                  variant="outline"
+                  size="sm"
+                  className="text-primary border-primary/30 hover:bg-primary/10"
+                >
+                  {network === "testnet" ? "Get Test XLM" : "Learn More"}
+                </Button>
+              </div>
+            ) : (
+              <>
+                <p className="text-3xl font-bold text-foreground mb-2">
+                  {showBalance ? (loading ? "Loading..." : balance) : "••••••"}
+                </p>
+                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${network === "stellar-testnet" ? "bg-orange-400" : "bg-green-400"}`}></div>
+                  Network: {network === "stellar-testnet" ? "Testnet" : "Mainnet"}
+                </p>
+              </>
+            )}
           </div>
           
           {stellarAddress && (

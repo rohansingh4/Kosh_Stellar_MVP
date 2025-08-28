@@ -662,12 +662,20 @@ async fn get_account_balance(network: Option<String>) -> Result<String, String> 
     let response_body = String::from_utf8(response.0.body)
         .map_err(|e| format!("Failed to decode response body: {}", e))?;
 
+
+
     if response.0.status.to_string() == "404" {
-        return Ok("Account not found (unfunded)".to_string());
+        return Ok("Account needs funding".to_string());
+    }
+
+    // Check for other error status codes
+    let status_code = response.0.status.to_string();
+    if status_code != "200" {
+        return Err(format!("HTTP request failed with status {}: {}", status_code, response_body));
     }
 
     let account: serde_json::Value = serde_json::from_str(&response_body)
-        .map_err(|e| format!("Failed to parse JSON response: {}", e))?;
+        .map_err(|e| format!("Failed to parse JSON response: {}. Body: {}", e, response_body.chars().take(500).collect::<String>()))?;
 
     // Find the native XLM balance
     if let Some(balances) = account["balances"].as_array() {
