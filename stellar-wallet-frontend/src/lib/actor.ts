@@ -10,7 +10,7 @@ const getCanisterIds = () => {
     // Local development canister IDs
     return {
       INTERNET_IDENTITY: 'rdmx6-jaaaa-aaaaa-aaadq-cai',
-      BACKEND: 'bkyz2-fmaaa-aaaaa-qaaaq-cai',
+      BACKEND: 'uxrrr-q7777-77774-qaaaq-cai',
     };
   } else {
     // Mainnet canister IDs

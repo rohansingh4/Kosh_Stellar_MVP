@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { LoginPage } from "@/pages/LoginPage"
 import { WalletPage } from "@/pages/WalletPage"
 import { useAuth } from "@/hooks/useAuth"
+import { Toaster } from "@/components/ui/toaster"
 
 const queryClient = new QueryClient()
 
@@ -37,6 +38,7 @@ const AppContent = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AppContent />
+    <Toaster />
   </QueryClientProvider>
 )
 

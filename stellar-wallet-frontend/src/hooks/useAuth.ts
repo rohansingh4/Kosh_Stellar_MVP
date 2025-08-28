@@ -117,57 +117,82 @@ export const useAuth = () => {
     try {
       setAuthState(prev => ({ ...prev, loading: true }));
       
-      // Configure login options based on auth method
-      // Force Internet Identity 2.0 for testing (you can set FORCE_II_2_0=true in localStorage to test)
-      const forceII20 = localStorage.getItem('FORCE_II_2_0') === 'true';
+      // Clear any cached authentication data that might be causing issues
+      await authState.authClient.logout();
       
-      // Important: II 2.0 (id.ai) only works with deployed canisters on IC mainnet
-      // For local development, we should warn users about limitations
-      if (forceII20 && HOST.includes('localhost')) {
-        console.warn('⚠️ Warning: Using II 2.0 with local development environment may cause certificate verification errors');
-        console.warn('💡 Recommendation: Deploy your backend to IC mainnet for full II 2.0 compatibility');
+      // Clear all localStorage entries that might interfere
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('ic-identity') || key.startsWith('kosh_stellar_address'))) {
+          keysToRemove.push(key);
+        }
       }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
       
-      const identityProvider = forceII20 
-        ? `https://id.ai`
-        : (HOST.includes('localhost') 
-          ? `http://${CANISTER_IDS.INTERNET_IDENTITY}.localhost:4943`
-          : `https://id.ai`);
+      console.log('Cleared cached authentication data');
+      
+      // Configure login options based on environment
+      // For local development, always use local Internet Identity
+      const identityProvider = HOST.includes('localhost') 
+        ? `http://${CANISTER_IDS.INTERNET_IDENTITY}.localhost:4943`
+        : `https://identity.ic0.app`;
       
       console.log('Using Identity Provider:', identityProvider);
-      console.log('Force II 2.0 mode:', forceII20);
+      console.log('Environment:', HOST.includes('localhost') ? 'local' : 'production');
+      console.log('Backend Canister ID:', CANISTER_IDS.BACKEND);
+      console.log('Host:', HOST);
       
       const loginOptions = {
         identityProvider: identityProvider,
         maxTimeToLive: BigInt(7 * 24 * 60 * 60 * 1000 * 1000 * 1000), // 7 days in nanoseconds
+        derivationOrigin: HOST.includes('localhost') ? undefined : window.location.origin,
         onSuccess: async () => {
+          console.log('Authentication successful, creating actor...');
           const identity = authState.authClient!.getIdentity();
           const userPrincipal = identity.getPrincipal();
           
-          // Create authenticated actor
-          const authenticatedActor = createActor(CANISTER_IDS.BACKEND, {
-            identity,
-          });
+          console.log('User Principal:', userPrincipal.toString());
           
-          setAuthState(prev => ({
-            ...prev,
-            isAuthenticated: true,
-            identity,
-            principal: userPrincipal,
-            actor: authenticatedActor,
-          }));
-          
-          // Auto-generate address if not cached for this user
-          const userPrincipalStr = userPrincipal.toString();
-          const cacheKey = `kosh_stellar_address_${userPrincipalStr}`;
-          const cachedAddress = localStorage.getItem(cacheKey);
-          if (!cachedAddress) {
-            console.log('No cached address found for user, generating new address...');
-            setTimeout(() => {
-              generateStellarAddress(authenticatedActor, userPrincipalStr);
-            }, 100);
+          try {
+            // Create authenticated actor with better error handling
+            const authenticatedActor = createActor(CANISTER_IDS.BACKEND, {
+              identity,
+            });
+            
+            setAuthState(prev => ({
+              ...prev,
+              isAuthenticated: true,
+              identity,
+              principal: userPrincipal,
+              actor: authenticatedActor,
+            }));
+            
+            // Auto-generate address if not cached for this user
+            const userPrincipalStr = userPrincipal.toString();
+            const cacheKey = `kosh_stellar_address_${userPrincipalStr}`;
+            const cachedAddress = localStorage.getItem(cacheKey);
+            if (!cachedAddress) {
+              console.log('No cached address found for user, generating new address...');
+              setTimeout(() => {
+                generateStellarAddress(authenticatedActor, userPrincipalStr);
+              }, 100);
+            }
+          } catch (actorError) {
+            console.error('Error creating actor:', actorError);
+            setAuthState(prev => ({
+              ...prev,
+              stellarAddress: { stellar_address: `Error creating actor: ${actorError}` }
+            }));
           }
         },
+        onError: (error) => {
+          console.error('Authentication error:', error);
+          setAuthState(prev => ({
+            ...prev,
+            stellarAddress: { stellar_address: `Authentication error: ${error}` }
+          }));
+        }
       };
 
       // Add Google-specific configuration if using Google auth
@@ -218,6 +243,10 @@ export const useAuth = () => {
     
     if (!currentActor) {
       console.warn('No actor available for address generation');
+      setAuthState(prev => ({
+        ...prev,
+        stellarAddress: { stellar_address: 'Error: No actor available for address generation' }
+      }));
       return;
     }
     
@@ -229,6 +258,8 @@ export const useAuth = () => {
     setAuthState(prev => ({ ...prev, walletLoading: true }));
     try {
       console.log('Generating Stellar address...');
+      console.log('Using actor for canister:', CANISTER_IDS.BACKEND);
+      console.log('User principal:', currentPrincipal);
       
       const result = await currentActor.public_key_stellar();
       console.log('Backend response:', result);
@@ -251,10 +282,17 @@ export const useAuth = () => {
       }
     } catch (error) {
       console.error('Failed to generate Stellar address:', error);
+      console.error('Error details:', {
+        error: error,
+        canisterId: CANISTER_IDS.BACKEND,
+        host: HOST,
+        principal: currentPrincipal
+      });
       setAuthState(prev => ({
         ...prev,
         stellarAddress: { stellar_address: `Error: ${error}` }
       }));
+      throw error;
     } finally {
       setAuthState(prev => ({ ...prev, walletLoading: false }));
     }
