@@ -50,6 +50,8 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        success: "hsl(var(--success))",
+        "crypto-teal": "hsl(var(--crypto-teal))",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -65,10 +67,37 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: 0 },
         },
+        'float': {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-10px)' }
+        },
+        'pulse-glow': {
+          '0%, 100%': { opacity: '0.3' },
+          '50%': { opacity: '0.8' }
+        },
+        'particle-float': {
+          '0%': { transform: 'translateY(0px) translateX(0px)', opacity: '0' },
+          '10%': { opacity: '1' },
+          '90%': { opacity: '1' },
+          '100%': { transform: 'translateY(-100px) translateX(20px)', opacity: '0' }
+        },
+        'yield-flow': {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(400%)' }
+        },
+        'spin-slow': {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' }
+        }
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        'float': 'float 3s ease-in-out infinite',
+        'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
+        'particle-float': 'particle-float 4s ease-in-out infinite',
+        'yield-flow': 'yield-flow 3s ease-in-out infinite',
+        'spin-slow': 'spin-slow 8s linear infinite'
       },
       backgroundImage: {
         'gradient-main': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
