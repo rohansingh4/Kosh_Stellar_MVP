@@ -1,6 +1,8 @@
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { RefreshCw } from "lucide-react"
+import { RefreshCw, Copy, Check } from "lucide-react"
+import { useState } from "react"
+import { useToast } from "@/hooks/use-toast"
 
 interface AddressDisplayProps {
   stellarAddress?: any
@@ -9,7 +11,30 @@ interface AddressDisplayProps {
 }
 
 const AddressDisplay = ({ stellarAddress, walletLoading, onRetryAddress }: AddressDisplayProps) => {
+  const [copied, setCopied] = useState(false)
+  const { toast } = useToast()
   const hasError = !stellarAddress?.stellar_address && !walletLoading
+
+  const handleCopy = async () => {
+    if (!stellarAddress?.stellar_address) return
+    
+    try {
+      await navigator.clipboard.writeText(stellarAddress.stellar_address)
+      setCopied(true)
+      toast({
+        title: "Address copied!",
+        description: "Stellar address copied to clipboard",
+      })
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy address:', err)
+      toast({
+        title: "Failed to copy",
+        description: "Could not copy address to clipboard",
+        variant: "destructive",
+      })
+    }
+  }
 
   return (
     <Card className="p-4 bg-card/50 backdrop-blur-sm border-border/30">
@@ -37,10 +62,23 @@ const AddressDisplay = ({ stellarAddress, walletLoading, onRetryAddress }: Addre
             </Button>
           </div>
         ) : (
-          <div className="p-3 bg-card/30 border border-border/20 rounded-lg">
+          <div className="p-3 bg-card/30 border border-border/20 rounded-lg flex items-center justify-between gap-2">
             <p className="text-primary font-mono text-sm break-all">
               {stellarAddress?.stellar_address}
             </p>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCopy}
+              className="shrink-0 h-6 w-6 hover:bg-primary/10"
+              title="Copy address"
+            >
+              {copied ? (
+                <Check className="h-3.5 w-3.5 text-green-500" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+            </Button>
           </div>
         )}
       </div>

@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, RefreshCw, Eye, EyeOff } from "lucide-react"
+import { Loader2, RefreshCw, Eye, EyeOff, Copy, Check } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 interface BalanceDisplayProps {
   stellarAddress: { stellar_address: string } | null
@@ -13,6 +14,29 @@ export const BalanceDisplay = ({ stellarAddress, getAccountBalance, network }: B
   const [balance, setBalance] = useState<string>("")
   const [loading, setLoading] = useState(false)
   const [showBalance, setShowBalance] = useState(true)
+  const [copied, setCopied] = useState(false)
+  const { toast } = useToast()
+
+  const handleCopy = async () => {
+    if (!stellarAddress?.stellar_address) return
+    
+    try {
+      await navigator.clipboard.writeText(stellarAddress.stellar_address)
+      setCopied(true)
+      toast({
+        title: "Address copied!",
+        description: "Stellar address copied to clipboard",
+      })
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy address:', err)
+      toast({
+        title: "Failed to copy",
+        description: "Could not copy address to clipboard",
+        variant: "destructive",
+      })
+    }
+  }
 
   const fetchBalance = async () => {
     if (!stellarAddress) return
@@ -24,7 +48,7 @@ export const BalanceDisplay = ({ stellarAddress, getAccountBalance, network }: B
       setBalance(balanceResult)
     } catch (error) {
       console.error("Failed to fetch balance:", error)
-      setBalance("Error fetching balance")
+      setBalance("Please Fund you Account.")
     } finally {
       setLoading(false)
     }
@@ -99,16 +123,31 @@ export const BalanceDisplay = ({ stellarAddress, getAccountBalance, network }: B
             )}
           </div>
           
-          {stellarAddress && (
+          {/* {stellarAddress && (
             <div className="p-4 rounded-lg bg-card/30 border border-border/20">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2 font-semibold">
-                Stellar Address
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">
+                  Stellar Address
+                </p>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleCopy}
+                  className="h-6 w-6 hover:bg-primary/10"
+                  title="Copy address"
+                >
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5 text-green-500" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </div>
               <p className="text-sm font-mono text-foreground/90 break-all leading-relaxed">
                 {stellarAddress.stellar_address}
               </p>
             </div>
-          )}
+          )} */}
         </div>
       </CardContent>
     </Card>
