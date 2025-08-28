@@ -186,7 +186,7 @@ export const useAuth = () => {
             }));
           }
         },
-        onError: (error) => {
+        onError: (error: any) => {
           console.error('Authentication error:', error);
           setAuthState(prev => ({
             ...prev,
@@ -198,7 +198,6 @@ export const useAuth = () => {
       // Add Google-specific configuration if using Google auth
       if (authMethod === 'google') {
         loginOptions.derivationOrigin = window.location.origin;
-        loginOptions.windowOpenerFeatures = 'width=500,height=600,scrollbars=yes,resizable=yes';
       }
 
       await authState.authClient.login(loginOptions);

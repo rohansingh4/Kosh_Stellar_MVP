@@ -77,7 +77,7 @@ const TokenBalances = ({ actor, selectedNetwork, onAddTrustline, stellarAddress 
     fetchAssets();
   }, [actor, stellarAddress, selectedNetwork]);
 
-  const formatBalance = (balance: string, assetCode: string) => {
+  const formatBalance = (balance: string, _assetCode: string) => {
     if (!balance) return '0.00';
     const numBalance = parseFloat(balance);
     

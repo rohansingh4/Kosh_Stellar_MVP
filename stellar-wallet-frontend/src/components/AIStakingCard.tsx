@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { TrendingUp, Bot, Zap } from "lucide-react"
+import { TrendingUp, Bot } from "lucide-react"
 
 const AIStakingCard = () => {
   return (

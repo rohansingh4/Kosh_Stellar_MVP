@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { 
-  ArrowUpRight, 
-  ArrowDownLeft, 
+   
   RefreshCw, 
   GitBranch,
   Send,
@@ -223,7 +222,7 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {actions.map((action, index) => (
+        {actions.map((action) => (
           <Card 
             key={action.label} 
             className={`p-4 bg-card/50 backdrop-blur-sm border-border/30 hover:border-border/50 transition-all duration-300 cursor-pointer group relative overflow-hidden ${
