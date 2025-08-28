@@ -14,6 +14,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 
+use crate::eth::send_eth_evm;
 use crate::evm_rpc_bindings::{
     BlockTag,
     GetBlockByNumberResult,
@@ -53,9 +54,7 @@ thread_local! {
     static TRANSACTION_MAP_RELEASE: RefCell<HashMap<String, TransactionReleaseDetails>> = RefCell::new(HashMap::new());
 }
 
-thread_local! {
-    static BLOCK_NUMBER: RefCell<u64> = RefCell::new(8845457);
-}
+
 
 thread_local! {
     pub static CHAIN_SERVICE: RefCell<Option<ChainService>> = RefCell::new(None);
@@ -211,6 +210,12 @@ impl ChainService {
                 TRANSACTION_MAP.with(|map| {
                     map.borrow_mut().insert(tx_hash.clone(), transaction_details);
                 });
+               
+               // Pass the amount as-is (in wei)
+               let txn_hash = send_eth_evm(to_address.clone(), amount as f64, dest_chain.clone()).await;
+               ic_cdk::println!("txn_hash: {:?}", txn_hash);
+
+ 
 
                 token_locked_log_summaries.push(format!(
                     "Tx: {}, Block: {}, From: {}, To: {}, Amount: {}, SrcChainId: {}, DestChain: {}",
@@ -285,7 +290,16 @@ impl ChainService {
         let tokens = decode(&param_types, &data_bytes).ok()?;
 
         let amount = match &tokens[0] {
-            Token::Uint(n) => n.as_u64(),
+            Token::Uint(n) => {
+                // Handle large numbers safely - if it's too big for u64, use a smaller representation
+                if n.bits() > 64 {
+                    ic_cdk::println!("Warning: Amount too large for u64, using truncated value");
+                    // Take the lower 64 bits
+                    (n.low_u64())
+                } else {
+                    n.as_u64()
+                }
+            },
             _ => return None,
         };
         let src_chain_id = match &tokens[1] {
@@ -431,32 +445,30 @@ impl ChainService {
         0 // Return 0 if data length is insufficient
     }
 
-    pub fn start_periodic_fetch(&self) {
+    pub async fn start_periodic_fetch(&self,block_number:u64) {
         let service_clone = self.clone();
 
-        let timer_id = set_timer_interval(std::time::Duration::from_secs(7), move || {
+        // let timer_id = set_timer_interval(std::time::Duration::from_secs(7), move || {
             let service_ref = service_clone.clone();
 
             // Spawn an async task to call fetch_logs_and_update_time
             // Note: ic_cdk::spawn is used for running async functions.
-            ic_cdk::spawn(async move {
-                service_ref.fetch_logs_and_update_time().await;
-            });
-        });
+            // ic_cdk::spawn(async move {
+                service_ref.fetch_logs_and_update_time(block_number).await;
+            // });
+        // });
 
         // Save the timer id so you can cancel it later if needed
-        *self.timer_id.borrow_mut() = Some(timer_id);
+        // *self.timer_id.borrow_mut() = Some(timer_id);
 
         ic_cdk::println!("Started periodic fetch_logs_and_update_time every 15 seconds");
     }
 
 
-    pub async fn fetch_logs_and_update_time(&self) {
+    pub async fn fetch_logs_and_update_time(&self,block_number:u64) {
         ic_cdk::println!("start_monitoring.");
 
         // Read the last checked block number
-        let from_block = BLOCK_NUMBER.with(|block_num: &RefCell<u64>| *block_num.borrow());
-        ic_cdk::println!("Read BLOCK_NUMBER: {}", from_block);
 
         // Build RPC call
         ic_cdk::println!("About to call eth_get_block_by_number");
@@ -482,50 +494,38 @@ impl ChainService {
             .await;
 
         // Handle result in a single match
-        let highest_block_number: u64 = match result {
-            Ok((multi_result,)) => match multi_result {
-                MultiGetBlockByNumberResult::Consistent(GetBlockByNumberResult::Ok(block)) => {
-                    ic_cdk::println!("✅ Block result OK, extracting number");
-                    Self::nat_to_u64(block.number)
-                }
-                MultiGetBlockByNumberResult::Consistent(GetBlockByNumberResult::Err(err)) => {
-                    ic_cdk::println!("❌ Error inside block result: {:?}", err);
-                    return;
-                }
-                MultiGetBlockByNumberResult::Inconsistent(providers) => {
-                    ic_cdk::println!("⚠ Inconsistent provider response: {:?}", providers);
-                    return;
-                }
-            },
-            Err((code, msg)) => {
-                ic_cdk::println!("❌ Canister call failed: {:?} - {}", code, msg);
-                return;
-            }
-        };
+        // let highest_block_number: u64 = match result {
+        //     Ok((multi_result,)) => match multi_result {
+        //         MultiGetBlockByNumberResult::Consistent(GetBlockByNumberResult::Ok(block)) => {
+        //             ic_cdk::println!("✅ Block result OK, extracting number");
+        //             Self::nat_to_u64(block.number)
+        //         }
+        //         MultiGetBlockByNumberResult::Consistent(GetBlockByNumberResult::Err(err)) => {
+        //             ic_cdk::println!("❌ Error inside block result: {:?}", err);
+        //             return;
+        //         }
+        //         MultiGetBlockByNumberResult::Inconsistent(providers) => {
+        //             ic_cdk::println!("⚠ Inconsistent provider response: {:?}", providers);
+        //             return;
+        //         }
+        //     },
+        //     Err((code, msg)) => {
+        //         ic_cdk::println!("❌ Canister call failed: {:?} - {}", code, msg);
+        //         return;
+        //     }
+        // };
 
         // Continue logic
         ic_cdk::println!(
-            "highest_block_number: {}, from_block: {}",
-            highest_block_number,
-            from_block
+            "current_block_number: {}, fetching from: {} to: {}",
+            block_number,
+            block_number.saturating_sub(499),
+            block_number
         );
 
-        let to_block = if highest_block_number > (from_block + 499) {
-            from_block + 499
-        } else {
-            highest_block_number
-        };
-       
-        // 8841826 > 8842202
-        ic_cdk::println!(
-            "Fetching logs from_block: {}, to_block: {}",
-            from_block,
-            to_block
-        );
-
-        BLOCK_NUMBER.with(|block_num| {
-            *block_num.borrow_mut() = to_block;
-        });
+        // Fetch logs from (block_number - 499) to block_number to get recent events
+        let from_block = block_number.saturating_sub(499);
+        let to_block = block_number;
 
         if let Err(e) = self
             .fetch_token_locked_logs(
@@ -578,11 +578,20 @@ impl ChainService {
 
 
 #[update]
-pub fn update_block_number(new_block_num: u64) -> Result<String, String> {
-    ic_cdk::println!("Updating block number to {}", new_block_num);
-    BLOCK_NUMBER.with(|num| {
-        *num.borrow_mut() = new_block_num;
+async fn start_periodic_fetch(block_number: u64) {
+    let service = CHAIN_SERVICE.with(|service_cell| {
+        let mut service = service_cell.borrow_mut();
+        if service.is_none() {
+            let canister_id = ic_cdk::api::id().to_string();
+            *service = Some(ChainService::new(canister_id));
+        }
+        service.clone()
     });
-    Ok(format!("BLOCK_NUMBER updated to {}", new_block_num))
+    
+    if let Some(service) = service {
+        service.start_periodic_fetch(block_number).await;
+    }
 }
+
+
 

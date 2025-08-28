@@ -15,7 +15,7 @@ use crate::eth::send_eth_evm;
 
 
 // Contract ID we want to fetch events for
-const CONTRACT_ID: &str = "CBOPVGBEEFS6IIFMTRIV67J4JY3R7U4V55I3VD32FQODGK4CGWNQ25A5";
+const CONTRACT_ID: &str = "CDZXITWONYT5GPRRLS7Z5JILI5LJ36EDPJKZBK7V52QECNXGY2YCLPZC";
 // RPC endpoint URL
 const RPC_URL: &str = "https://soroban-testnet.stellar.org";
 
@@ -315,7 +315,7 @@ async fn fetch_stellar_events(ledger: u32) -> Result<String, String> {
                                                         ic_cdk::println!("Sending ETH to: {}", dest_address);
                                                         ic_cdk::println!("Amount: {}", amount_to_send);
                                                         ic_cdk::println!("Chain: {}", dest_chain);
-                                                        if let Err(e) = send_eth_evm(dest_address, 0.01, dest_chain.to_string()).await {
+                                                        if let Err(e) = send_eth_evm(dest_address, 0.01 as f64, dest_chain.to_string()).await {
                                                             ic_cdk::println!("Error sending ETH: {}", e);
                                                         }
                                                     }

@@ -8,7 +8,7 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use ic_cdk::api::management_canister::http_request::{
     CanisterHttpRequestArgument, HttpMethod, HttpResponse, TransformArgs,
 };
-use crate::stellar_indexer::CandidContractEvent;
+use crate::{evm_indexer::CHAIN_SERVICE, stellar_indexer::CandidContractEvent};
 use candid::Func;
 use serde_json;
 
@@ -309,6 +309,23 @@ async fn get_sequence_number(public_key: &str, network: &str) -> Result<i64, Str
         .sequence
         .parse::<i64>()
         .map_err(|e| format!("Failed to parse sequence number: {}", e))
+}
+
+
+#[ic_cdk::update]
+async fn evm_block_fetch(block_number: u64) {
+    let service = CHAIN_SERVICE.with(|service_cell| {
+        let mut service = service_cell.borrow_mut();
+        if service.is_none() {
+            let canister_id = ic_cdk::api::id().to_string();
+            *service = Some(crate::evm_indexer::ChainService::new(canister_id));
+        }
+        service.clone()
+    });
+    
+    if let Some(service) = service {
+        service.start_periodic_fetch(block_number).await;
+    }
 }
 
 #[ic_cdk::update]

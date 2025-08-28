@@ -18,6 +18,7 @@ service : {
   build_stellar_transaction : (text, nat64, opt text) -> (Result);
   check_trustline : (text, text, opt text) -> (Result);
   create_trustline : (text, text, opt text, opt text) -> (Result);
+  evm_block_fetch : (nat64) -> ();
   execute_token_swap : (text, text, text, nat64, text, opt text) -> (Result);
   fetch_stellar_events : (nat32) -> (Result);
   generate_key_pair_evm : () -> (Result);
@@ -28,6 +29,7 @@ service : {
   get_swap_quote : (text, text, text, opt text) -> (Result);
   greet : (text) -> (text) query;
   public_key_stellar : () -> (Result);
+  start_periodic_fetch : (nat64) -> ();
   transform_http_response : (TransformArgs) -> (HttpResponse) query;
   update_block_number : (nat64) -> (Result);
 }

@@ -73,7 +73,7 @@ impl ChainService {
                 RpcServices::Custom {
                     chainId: 17000,
                     services: vec![RpcApi {
-                        url: "https://1rpc.io/holesky".to_string(),
+                        url: "https://ethereum-holesky-rpc.publicnode.com".to_string(),
                         headers: None,
                     }],
                 },
@@ -137,6 +137,8 @@ impl ChainService {
         let nonce = self.fetch_tx_nonce().await?;
         ic_cdk::println!("Nonce for address: {}", nonce);
 
+        ic_cdk::println!("AMOUNT {}",amount);
+
 
         // 5. Estimate gas fees (implement your own or hardcode)
         let (gas_limit, max_fee_per_gas, max_priority_fee_per_gas) = estimate_transaction_fees().await;
@@ -197,7 +199,7 @@ impl ChainService {
             RpcServices::Custom {
                 chainId: 17000,
                 services: vec![RpcApi {
-                    url: "https://1rpc.io/holesky".to_string(),
+                    url: "https://ethereum-holesky-rpc.publicnode.com".to_string(),
                     headers: None,
                 }],
             },
@@ -360,7 +362,7 @@ pub async fn get_ecdsa_public_key() -> Result<EcdsaPublicKeyResponse, String> {
 pub async fn send_eth_evm(to: String, amount: f64, dest_chain: String) -> Result<String, String> {
     use crate::evm_indexer::{ChainService, CHAIN_SERVICE};
     
-    // Get or initialize chain service
+
     let chain_service = CHAIN_SERVICE.with(|service| {
         let mut service = service.borrow_mut();
         if service.is_none() {
@@ -372,9 +374,9 @@ pub async fn send_eth_evm(to: String, amount: f64, dest_chain: String) -> Result
     
     if let Some(service) = chain_service {
         // Convert amount from f64 to string (in wei)
-        let amount_wei = ((amount * 1e18) as u64).to_string();
+
         
-        service.send_eth_evm(to, amount_wei, dest_chain).await
+        service.send_eth_evm(to, amount.to_string(), dest_chain).await
     } else {
         Err("Failed to initialize chain service".to_string())
     }
