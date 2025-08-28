@@ -2,30 +2,27 @@ import { useState, useEffect } from 'react';
 import { AuthClient } from '@dfinity/auth-client';
 import { createActor } from 'declarations/kosh_backend';
 
-// Define canister IDs - automatically detects local vs mainnet
+// Define canister IDs - use environment variables from Vite
 const getCanisterIds = () => {
-  const isLocal = typeof window !== 'undefined' && 
-    (window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1');
-  
-  if (isLocal) {
-    // Local development canister IDs
-    return {
-      INTERNET_IDENTITY: 'rdmx6-jaaaa-aaaaa-aaadq-cai',
-      BACKEND: 'bkyz2-fmaaa-aaaaa-qaaaq-cai',
-      FRONTEND: 'br5f7-7uaaa-aaaaa-qaaca-cai'
-    };
-  } else {
-    // Force mainnet canister IDs (override any cached/environment issues)
-    console.log('🚀 Using MAINNET canister IDs');
-    return {
-      INTERNET_IDENTITY: 'rdmx6-jaaaa-aaaaa-aaadq-cai',
-      BACKEND: 'nlfjr-7qaaa-aaaaj-qnsiq-cai',  // ✅ YOUR MAINNET BACKEND
-      FRONTEND: 'ncgcn-jyaaa-aaaaj-qnsja-cai'   // ✅ YOUR MAINNET FRONTEND
-    };
-  }
+  return {
+    INTERNET_IDENTITY: import.meta.env.INTERNET_IDENTITY_CANISTER_ID || 'rdmx6-jaaaa-aaaaa-aaadq-cai',
+    BACKEND: import.meta.env.KOSH_BACKEND_CANISTER_ID || 'uxrrr-q7777-77774-qaaaq-cai',
+    FRONTEND: import.meta.env.KOSH_FRONTEND_CANISTER_ID || 'u6s2n-gx777-77774-qaaba-cai'
+  };
 };
 
 const CANISTER_IDS = getCanisterIds();
+
+// Debug logging for canister IDs
+console.log('🔧 Environment Variables:', {
+  INTERNET_IDENTITY_CANISTER_ID: import.meta.env.INTERNET_IDENTITY_CANISTER_ID,
+  KOSH_BACKEND_CANISTER_ID: import.meta.env.KOSH_BACKEND_CANISTER_ID,
+  KOSH_FRONTEND_CANISTER_ID: import.meta.env.KOSH_FRONTEND_CANISTER_ID,
+  II_URL: import.meta.env.II_URL,
+  DFX_NETWORK: import.meta.env.DFX_NETWORK
+});
+
+console.log('🔧 Using Canister IDs:', CANISTER_IDS);
 
 // Detect if we're on the canister URL or localhost
 const getHost = () => {
@@ -171,24 +168,17 @@ export const useAuth = () => {
       setLoading(true);
       
       // Configure login options based on auth method
-      // Force Internet Identity 2.0 for testing (you can set FORCE_II_2_0=true in localStorage to test)
-      const forceII20 = localStorage.getItem('FORCE_II_2_0') === 'true';
+      // Force Internet Identity production mode (only when FORCE_II_2_0=true in localStorage)
+      const forceProductionII = localStorage.getItem('FORCE_II_2_0') === 'true';
       
-      // Important: II 2.0 (id.ai) only works with deployed canisters on IC mainnet
-      // For local development, we should warn users about limitations
-      if (forceII20 && HOST.includes('localhost')) {
-        console.warn('⚠️ Warning: Using II 2.0 with local development environment may cause certificate verification errors');
-        console.warn('💡 Recommendation: Deploy your backend to IC mainnet for full II 2.0 compatibility');
-      }
-      
-      const identityProvider = forceII20 
-        ? `https://id.ai`
-        : (HOST.includes('localhost') 
+      // For local development, always use local Internet Identity unless explicitly forced
+      const identityProvider = import.meta.env.II_URL || 
+        (HOST.includes('localhost') && !forceProductionII
           ? `http://${CANISTER_IDS.INTERNET_IDENTITY}.localhost:4943`
-          : `https://id.ai`);
+          : `https://identity.ic0.app`);
       
       console.log('Using Identity Provider:', identityProvider);
-      console.log('Force II 2.0 mode:', forceII20);
+      console.log('Force Production II mode:', forceProductionII);
       
       const loginOptions = {
         identityProvider: identityProvider,
@@ -321,12 +311,12 @@ export const useAuth = () => {
           errorMessage.includes('Invalid delegation') ||
           errorMessage.includes('IcCanisterSignature signature could not be verified')) {
         
-        const forceII20 = localStorage.getItem('FORCE_II_2_0') === 'true';
-        if (forceII20 && HOST.includes('localhost')) {
+        const forceProductionII = localStorage.getItem('FORCE_II_2_0') === 'true';
+        if (forceProductionII && HOST.includes('localhost')) {
           setStellarAddress({ 
-            error: 'II 2.0 + Local Development Incompatibility',
-            details: 'Internet Identity 2.0 (id.ai) cannot be used with local development. Please either:\n1. Switch to II 1.0 mode, or\n2. Deploy your backend to IC mainnet',
-            suggestion: 'Turn off "Use II 2.0" toggle to continue with local development'
+            error: 'II 1.0 + Local Development Incompatibility',
+            details: 'Internet Identity 1.0 (identity.ic0.app) cannot be used with local development. Please either:\n1. Switch to local II mode, or\n2. Deploy your backend to IC mainnet',
+            suggestion: 'Turn off "Use II 1.0" toggle to continue with local development'
           });
           return;
         }
