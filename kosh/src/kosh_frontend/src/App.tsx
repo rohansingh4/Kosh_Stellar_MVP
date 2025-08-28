@@ -57,7 +57,9 @@ const AuthenticatedApp = () => {
 
   // Convert network names to backend format
   const getNetworkType = (network: string) => {
-    return network === "stellar-mainnet" ? "mainnet" : "testnet";
+    if (network === "stellar-mainnet") return "mainnet";
+    if (network === "base-mainnet") return "base";
+    return "testnet";
   };
 
   // Wrapped functions that include network parameter

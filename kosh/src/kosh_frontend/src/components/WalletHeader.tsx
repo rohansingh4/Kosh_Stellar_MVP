@@ -147,7 +147,8 @@ const WalletHeader = ({ principal, onLogout, selectedNetwork = "stellar-testnet"
           <SelectTrigger className="w-full bg-card/50 backdrop-blur-sm border-border/20 hover:bg-card/70 transition-smooth">
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full animate-pulse-glow ${
-                selectedNetwork === "stellar-mainnet" ? "bg-crypto-blue" : "bg-success"
+                selectedNetwork === "stellar-mainnet" ? "bg-crypto-blue" : 
+                selectedNetwork === "base-mainnet" ? "bg-blue-500" : "bg-success"
               }`}></span>
               <SelectValue />
             </div>
@@ -155,6 +156,7 @@ const WalletHeader = ({ principal, onLogout, selectedNetwork = "stellar-testnet"
           <SelectContent className="bg-card/95 backdrop-blur-sm border-border/20">
             <SelectItem value="stellar-testnet">Stellar Testnet</SelectItem>
             <SelectItem value="stellar-mainnet">Stellar Mainnet</SelectItem>
+            <SelectItem value="base-mainnet">Base Mainnet</SelectItem>
             <SelectItem value="ethereum" disabled>Ethereum (Coming Soon)</SelectItem>
             <SelectItem value="polygon" disabled>Polygon (Coming Soon)</SelectItem>
           </SelectContent>

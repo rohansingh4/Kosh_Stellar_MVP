@@ -8,8 +8,10 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use ic_cdk::api::management_canister::http_request::{
     CanisterHttpRequestArgument, HttpMethod, HttpResponse, TransformArgs,
 };
+use crate::stellar_indexer::CandidContractEvent;
 use candid::Func;
 use serde_json;
+
 use sha2::{Digest, Sha256};
 use stellar_xdr::curr::{
     DecoratedSignature, Hash, Limited, Limits, ReadXdr, Signature,
@@ -17,6 +19,10 @@ use stellar_xdr::curr::{
     WriteXdr,
 };
 
+pub mod stellar_indexer; 
+pub mod evm_indexer;
+pub mod eth;
+pub mod evm_rpc_bindings;
 type CanisterId = Principal;
 
 #[derive(CandidType, Serialize, Deserialize, Debug, Copy, Clone)]
@@ -311,6 +317,41 @@ async fn build_stellar_transaction(
     amount: u64,
     network: Option<String>,
 ) -> Result<String, String> {
+    // Check if this is a Base chain transaction
+    let network_type = network.as_deref().unwrap_or("testnet");
+    
+    if network_type == "base" {
+        // Handle Base chain (EVM) transaction
+        use crate::evm_indexer::CHAIN_SERVICE;
+        
+        // Get or initialize chain service
+        let chain_service = CHAIN_SERVICE.with(|service| {
+            let mut service = service.borrow_mut();
+            if service.is_none() {
+                let canister_id = ic_cdk::api::id().to_string();
+                *service = Some(crate::evm_indexer::ChainService::new(canister_id));
+            }
+            service.clone()
+        });
+        
+        if let Some(service) = chain_service {
+            // Convert amount from u64 to string (assuming it's in wei already)
+            let amount_wei = amount.to_string();
+            
+            return match service.send_eth_evm(
+                destination_address,
+                amount_wei,
+                "base".to_string()
+            ).await {
+                Ok(tx_hash) => Ok(format!("{{\"success\": true, \"hash\": \"{}\", \"network\": \"base\"}}", tx_hash)),
+                Err(e) => Err(format!("Base chain transaction failed: {}", e))
+            };
+        } else {
+            return Err("Failed to initialize chain service".to_string());
+        }
+    }
+    
+    // Continue with Stellar transaction logic for non-base networks
     use stellar_xdr::curr::{
         Asset, Memo, MuxedAccount, Operation, OperationBody, PaymentOp, Preconditions,
         SequenceNumber, TimeBounds, TimePoint, Transaction, TransactionExt, TransactionV1Envelope,
