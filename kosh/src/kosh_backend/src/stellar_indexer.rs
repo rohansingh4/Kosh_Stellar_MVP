@@ -15,7 +15,7 @@ use crate::eth::send_eth_evm;
 
 
 // Contract ID we want to fetch events for
-const CONTRACT_ID: &str = "CDZXITWONYT5GPRRLS7Z5JILI5LJ36EDPJKZBK7V52QECNXGY2YCLPZC";
+const CONTRACT_ID: &str = "CDTA5IYGUGRI4PAGXJL7TPBEIC3EZY6V23ILF5EDVXFVLCGGMVOK4CRL";
 // RPC endpoint URL
 const RPC_URL: &str = "https://soroban-testnet.stellar.org";
 
@@ -199,8 +199,6 @@ async fn fetch_stellar_events(ledger: u32) -> Result<String, String> {
                 continue;
             }
         };
-        
-
         
      
        if current_ledger <= latest_ledger {
