@@ -42,10 +42,10 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
   const [showBridgeModal, setShowBridgeModal] = useState(false);
   const [sendForm, setSendForm] = useState({ destination: '', amount: '' });
   const [bridgeForm, setBridgeForm] = useState({ 
-    fromTokenAddress: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC', // Default token
-    destToken: 'ETH',
+    fromToken: 'XLM', // Default to XLM (native Stellar)
+    destToken: 'HOLSKEY',
     amount: '',
-    destChain: '6565', // Default to ETH chain
+    destChain: '17000', // Default to Holsky Testnet
     recipientAddress: ''
   });
   const [transactionLoading, setTransactionLoading] = useState(false);
@@ -231,8 +231,8 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
       console.log('🔒 Starting bridge transaction...');
       
       const lockParams = {
-        userAddress: stellarAddress.stellar_address,
-        fromTokenAddress: bridgeForm.fromTokenAddress,
+        userAddress: stellarAddress.stellar_address, // Use current user's Stellar address
+        fromToken: bridgeForm.fromToken, // XLM (native Stellar)
         destToken: bridgeForm.destToken,
         amount: parseFloat(bridgeForm.amount),
         destChain: bridgeForm.destChain,
@@ -257,10 +257,10 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
       // Close modal after delay
       setTimeout(() => {
         setBridgeForm({ 
-          fromTokenAddress: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
-          destToken: 'ETH',
+          fromToken: 'XLM',
+          destToken: 'HOLSKEY',
           amount: '',
-          destChain: '6565',
+          destChain: '17000',
           recipientAddress: ''
         });
         setBridgeResult(null);
@@ -709,14 +709,14 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
 
       {/* Bridge Modal */}
       <Dialog open={showBridgeModal} onOpenChange={setShowBridgeModal}>
-        <DialogContent className="bg-card/95 backdrop-blur-sm border-border/20 max-w-lg">
-          <DialogHeader>
+        <DialogContent className="bg-card/95 backdrop-blur-sm border-border/20 max-w-lg w-[calc(100%-2rem)] sm:w-full max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 pb-4">
             <DialogTitle className="flex items-center gap-2">
               <GitBranch className="w-5 h-5 text-indigo-500" />
               Bridge Tokens
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="px-1 py-2 space-y-4 max-h-[calc(90vh-8rem)] overflow-y-auto">
             {!bridgeResult ? (
               <>
                 <div className="space-y-2">
@@ -818,10 +818,13 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
                 <Progress value={bridgeProgress} className="w-full" />
                 <p className="text-xs text-center text-muted-foreground">
                   {bridgeProgress < 25 ? 'Preparing lock transaction...' :
-                   bridgeProgress < 50 ? 'Building Soroban contract call...' :
-                   bridgeProgress < 75 ? 'Signing with threshold cryptography...' :
-                   bridgeProgress < 90 ? 'Submitting to Stellar network...' :
-                   'Finalizing bridge...'}
+                   bridgeProgress < 35 ? 'Fetching account data from Stellar...' :
+                   bridgeProgress < 45 ? 'Building Soroban contract call...' :
+                   bridgeProgress < 65 ? 'Creating transaction with Stellar SDK...' :
+                   bridgeProgress < 85 ? 'Signing with threshold cryptography...' :
+                   bridgeProgress < 95 ? 'Submitting to Stellar network...' :
+                   bridgeProgress < 98 ? 'Confirming contract execution...' :
+                   'Bridge completed!'}
                 </p>
               </div>
             )}
@@ -903,25 +906,28 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
               </div>
             )}
 
-            {!bridgeResult && (
-              <div className="flex gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowBridgeModal(false)}
-                  className="flex-1"
-                  disabled={bridgeLoading}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleBridgeTransaction}
-                  disabled={bridgeLoading || !bridgeForm.amount || !bridgeForm.recipientAddress}
-                  className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600"
-                >
-                  {bridgeLoading ? 'Bridging...' : 'Bridge Tokens'}
-                </Button>
-              </div>
-            )}
+            {/* Action Buttons - Fixed at bottom */}
+            <div className="sticky bottom-0 bg-card/95 backdrop-blur-sm border-t border-border/20 pt-4 mt-6">
+              {!bridgeResult && (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowBridgeModal(false)}
+                    className="flex-1 text-sm"
+                    disabled={bridgeLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleBridgeTransaction}
+                    disabled={bridgeLoading || !bridgeForm.amount || !bridgeForm.recipientAddress}
+                    className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-sm"
+                  >
+                    {bridgeLoading ? 'Bridging...' : 'Bridge Tokens'}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -929,4 +935,4 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
   );
 };
 
-export default ActionButton
+export default ActionButtons

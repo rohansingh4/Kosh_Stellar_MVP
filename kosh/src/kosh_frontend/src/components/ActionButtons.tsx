@@ -23,7 +23,7 @@ import SwapComponent from "./SwapComponent";
 import TokenBalances from "./TokenBalances";
 import TrustlineManager from "./TrustlineManager";
 import QRCode from 'qrcode';
-import { executeBridgeTransaction, getSupportedChains, getSupportedTokens } from "../lib/bridgeService.js";
+import { executeBridgeTransaction, getSupportedChains, getSupportedTokens, getSupportedSourceTokens } from "../lib/bridgeService.js";
 
 interface ActionButtonsProps {
   stellarAddress?: any;
@@ -42,10 +42,10 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
   const [showBridgeModal, setShowBridgeModal] = useState(false);
   const [sendForm, setSendForm] = useState({ destination: '', amount: '' });
   const [bridgeForm, setBridgeForm] = useState({ 
-    fromTokenAddress: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC', // Default token
-    destToken: 'ETH',
+    fromToken: 'XLM', // Default to XLM (native Stellar)
+    destToken: 'HOLSKEY',
     amount: '',
-    destChain: '6565', // Default to ETH chain
+    destChain: '17000', // Default to Holsky Testnet
     recipientAddress: ''
   });
   const [transactionLoading, setTransactionLoading] = useState(false);
@@ -61,6 +61,7 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
   // Get supported chains and tokens for bridge
   const supportedChains = getSupportedChains();
   const supportedTokens = getSupportedTokens();
+  const supportedSourceTokens = getSupportedSourceTokens();
 
   // Progress simulation effect for transactions
   useEffect(() => {
@@ -211,8 +212,8 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
       console.log('🔒 Starting bridge transaction...');
       
       const lockParams = {
-        userAddress: stellarAddress.stellar_address,
-        fromTokenAddress: bridgeForm.fromTokenAddress,
+        userAddress: stellarAddress.stellar_address, // Use current user's Stellar address
+        fromToken: bridgeForm.fromToken, // XLM (native Stellar)
         destToken: bridgeForm.destToken,
         amount: parseFloat(bridgeForm.amount),
         destChain: bridgeForm.destChain,
@@ -237,10 +238,10 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
       // Close modal after delay
       setTimeout(() => {
         setBridgeForm({ 
-          fromTokenAddress: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
-          destToken: 'ETH',
+          fromToken: 'XLM',
+          destToken: 'HOLSKEY',
           amount: '',
-          destChain: '6565',
+          destChain: '17000',
           recipientAddress: ''
         });
         setBridgeResult(null);
@@ -687,67 +688,70 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
 
       {/* Bridge Modal */}
       <Dialog open={showBridgeModal} onOpenChange={setShowBridgeModal}>
-        <DialogContent className="bg-card/95 backdrop-blur-sm border-border/20 max-w-lg">
-          <DialogHeader>
+        <DialogContent className="bg-card/95 backdrop-blur-sm border-border/20 max-w-lg w-[calc(100%-2rem)] sm:w-full max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 pb-4">
             <DialogTitle className="flex items-center gap-2">
               <GitBranch className="w-5 h-5 text-indigo-500" />
               Bridge Tokens
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="px-1 py-2 space-y-4 max-h-[calc(90vh-8rem)] overflow-y-auto">
             {!bridgeResult ? (
               <>
+                {/* From Address (User's Current Address) */}
                 <div className="space-y-2">
-                  <Label htmlFor="fromToken">From Token Address</Label>
-                  <Input
-                    id="fromToken"
-                    value={bridgeForm.fromTokenAddress}
-                    onChange={(e) => setBridgeForm({...bridgeForm, fromTokenAddress: e.target.value})}
-                    placeholder="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
-                    className="bg-card/50 border-border/20 font-mono text-xs"
-                    disabled={bridgeLoading}
-                  />
-                  <p className="text-xs text-muted-foreground">Stellar token contract address</p>
+                  <Label className="text-sm font-medium">From Address (Your Stellar Address)</Label>
+                  <div className="p-2 sm:p-3 bg-card/30 rounded-lg border border-border/10">
+                    <p className="text-primary font-mono text-xs sm:text-sm break-all">
+                      {stellarAddress?.stellar_address || 'Address not available'}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">This is your current Stellar address</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="destToken">Destination Token</Label>
-                    <select
-                      id="destToken"
-                      value={bridgeForm.destToken}
-                      onChange={(e) => setBridgeForm({...bridgeForm, destToken: e.target.value})}
-                      className="w-full px-3 py-2 bg-card/50 border border-border/20 rounded-md text-sm disabled:opacity-50"
-                      disabled={bridgeLoading}
-                    >
-                      {supportedTokens.map((token) => (
-                        <option key={token.symbol} value={token.symbol}>
-                          {token.symbol} - {token.name}
-                        </option>
-                      ))}
-                    </select>
+                {/* From Token (Fixed to XLM) */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">From Token</Label>
+                  <div className="p-2 sm:p-3 bg-card/30 rounded-lg border border-border/10">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
+                        <span className="text-white text-xs font-bold">XLM</span>
+                      </div>
+                      <span className="font-medium text-sm sm:text-base">Stellar Lumens (XLM)</span>
+                    </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="destChain">Destination Chain</Label>
-                    <select
-                      id="destChain"
-                      value={bridgeForm.destChain}
-                      onChange={(e) => setBridgeForm({...bridgeForm, destChain: e.target.value})}
-                      className="w-full px-3 py-2 bg-card/50 border border-border/20 rounded-md text-sm disabled:opacity-50"
-                      disabled={bridgeLoading}
-                    >
-                      {supportedChains.map((chain) => (
-                        <option key={chain.id} value={chain.id}>
-                          {chain.icon} {chain.name} ({chain.id})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <p className="text-xs text-muted-foreground">Native Stellar token</p>
                 </div>
 
+                {/* Destination Token (Fixed to HOLSKEY) */}
                 <div className="space-y-2">
-                  <Label htmlFor="bridgeAmount">Amount</Label>
+                  <Label className="text-sm font-medium">Destination Token</Label>
+                  <div className="p-2 sm:p-3 bg-card/30 rounded-lg border border-border/10">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center">
+                        <span className="text-white text-xs font-bold">H</span>
+                      </div>
+                      <span className="font-medium text-sm sm:text-base">Holskey Token (HOLSKEY)</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">On Holsky Testnet</p>
+                </div>
+
+                {/* Destination Chain (Fixed to Holsky Testnet) */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Destination Chain</Label>
+                  <div className="p-2 sm:p-3 bg-card/30 rounded-lg border border-border/10">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base sm:text-lg">🔷</span>
+                      <span className="font-medium text-sm sm:text-base">Holsky Testnet (17000)</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Ethereum-compatible testnet</p>
+                </div>
+
+                {/* Amount Input */}
+                <div className="space-y-2">
+                  <Label htmlFor="bridgeAmount" className="text-sm font-medium">Amount (XLM)</Label>
                   <Input
                     id="bridgeAmount"
                     type="number"
@@ -756,30 +760,33 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
                     placeholder="0.00"
                     step="0.0000001"
                     min="0"
-                    className="bg-card/50 border-border/20"
+                    className="bg-card/50 border-border/20 text-sm"
                     disabled={bridgeLoading}
                   />
+                  <p className="text-xs text-muted-foreground">Amount of XLM to bridge to HOLSKEY</p>
                 </div>
 
+                {/* Recipient Address */}
                 <div className="space-y-2">
-                  <Label htmlFor="recipientAddress">Recipient Address</Label>
+                  <Label htmlFor="recipientAddress" className="text-sm font-medium">Recipient Address on Holsky Testnet</Label>
                   <Input
                     id="recipientAddress"
                     value={bridgeForm.recipientAddress}
                     onChange={(e) => setBridgeForm({...bridgeForm, recipientAddress: e.target.value})}
                     placeholder="0x8Da1867ab5eE5385dc72f5901bC9Bd16F580d157"
-                    className="bg-card/50 border-border/20 font-mono text-xs"
+                    className="bg-card/50 border-border/20 font-mono text-xs sm:text-sm"
                     disabled={bridgeLoading}
                   />
-                  <p className="text-xs text-muted-foreground">Destination chain wallet address</p>
+                  <p className="text-xs text-muted-foreground">Your Ethereum-compatible address on Holsky Testnet</p>
                 </div>
 
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+                {/* Bridge Summary */}
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
                   <div className="flex items-start gap-2">
-                    <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 shrink-0"></div>
-                    <div className="text-sm text-amber-700 dark:text-amber-300">
-                      <p className="font-semibold mb-1">Bridge Notice</p>
-                      <p>This will lock your tokens on Stellar and mint equivalent tokens on the destination chain. Bridge fees may apply.</p>
+                    <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 shrink-0"></div>
+                    <div className="text-sm text-blue-700 dark:text-blue-300">
+                      <p className="font-semibold mb-1">Bridge Summary</p>
+                      <p>Your {bridgeForm.amount || '0'} XLM will be locked on Stellar and equivalent HOLSKEY tokens will be minted on Holsky Testnet.</p>
                     </div>
                   </div>
                 </div>
@@ -796,10 +803,13 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
                 <Progress value={bridgeProgress} className="w-full" />
                 <p className="text-xs text-center text-muted-foreground">
                   {bridgeProgress < 25 ? 'Preparing lock transaction...' :
-                   bridgeProgress < 50 ? 'Building Soroban contract call...' :
-                   bridgeProgress < 75 ? 'Signing with threshold cryptography...' :
-                   bridgeProgress < 90 ? 'Submitting to Stellar network...' :
-                   'Finalizing bridge...'}
+                   bridgeProgress < 35 ? 'Fetching account data from Stellar...' :
+                   bridgeProgress < 45 ? 'Building Soroban contract call...' :
+                   bridgeProgress < 65 ? 'Creating transaction with Stellar SDK...' :
+                   bridgeProgress < 85 ? 'Signing with threshold cryptography...' :
+                   bridgeProgress < 95 ? 'Submitting to Stellar network...' :
+                   bridgeProgress < 98 ? 'Confirming contract execution...' :
+                   'Bridge completed!'}
                 </p>
               </div>
             )}
@@ -836,6 +846,37 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
                           </div>
                         </div>
                       </div>
+                      
+                      {/* Contract Execution Details */}
+                      {bridgeResult.contractDetails && (
+                        <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-3 space-y-2">
+                          <h4 className="font-semibold text-sm text-indigo-700 dark:text-indigo-300">
+                            🔗 Frontend-Built Soroban Contract
+                          </h4>
+                          <div className="grid grid-cols-1 gap-1 text-xs">
+                            <div>
+                              <span className="text-muted-foreground">Contract ID:</span>
+                              <p className="font-mono text-xs break-all">{bridgeResult.contractDetails.contractId}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Network:</span>
+                              <p className="font-medium">{bridgeResult.contractDetails.network}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Sequence:</span>
+                              <p className="font-medium">{bridgeResult.contractDetails.sequenceNumber}</p>
+                            </div>
+                            {bridgeResult.contractDetails.transactionXDR && (
+                              <div>
+                                <span className="text-muted-foreground">Transaction XDR:</span>
+                                <p className="font-mono text-xs break-all bg-card/20 p-1 rounded mt-1">
+                                  {bridgeResult.contractDetails.transactionXDR.substring(0, 50)}...
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       
                       {bridgeResult.hash && (
                         <>
@@ -881,25 +922,28 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
               </div>
             )}
 
-            {!bridgeResult && (
-              <div className="flex gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowBridgeModal(false)}
-                  className="flex-1"
-                  disabled={bridgeLoading}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleBridgeTransaction}
-                  disabled={bridgeLoading || !bridgeForm.amount || !bridgeForm.recipientAddress}
-                  className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600"
-                >
-                  {bridgeLoading ? 'Bridging...' : 'Bridge Tokens'}
-                </Button>
-              </div>
-            )}
+            {/* Action Buttons - Fixed at bottom */}
+            <div className="sticky bottom-0 bg-card/95 backdrop-blur-sm border-t border-border/20 pt-4 mt-6">
+              {!bridgeResult && (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowBridgeModal(false)}
+                    className="flex-1 text-sm"
+                    disabled={bridgeLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleBridgeTransaction}
+                    disabled={bridgeLoading || !bridgeForm.amount || !bridgeForm.recipientAddress}
+                    className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-sm"
+                  >
+                    {bridgeLoading ? 'Bridging...' : 'Bridge Tokens'}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
