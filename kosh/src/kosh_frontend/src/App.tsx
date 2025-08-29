@@ -32,7 +32,7 @@ const AuthenticatedApp = () => {
   const [priceLoading, setPriceLoading] = useState(false);
   
   // Network switching state
-  const [selectedNetwork, setSelectedNetwork] = useState("stellar-testnet");
+  const [selectedNetwork, setSelectedNetwork] = useState("stellar-mainnet");
 
   useEffect(() => {
     fetchPriceData();

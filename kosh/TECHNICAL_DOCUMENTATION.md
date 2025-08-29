@@ -393,7 +393,7 @@ const [walletState, setWalletState] = useState({
   balanceVisible: false,
   
   // UI state
-  selectedNetwork: 'stellar-testnet',
+  selectedNetwork: 'stellar-mainnet',
   modals: {
     send: false,
     receive: false,

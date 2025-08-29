@@ -23,7 +23,7 @@ import SwapComponent from "./SwapComponent";
 import TokenBalances from "./TokenBalances";
 import TrustlineManager from "./TrustlineManager";
 import QRCode from 'qrcode';
-import { executeBridgeTransaction, getSupportedChains, getSupportedTokens, getSupportedSourceTokens } from "../lib/bridgeService.js";
+
 
 interface ActionButtonsProps {
   stellarAddress?: any;
@@ -60,9 +60,9 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
   const { toast } = useToast();
 
   // Get supported chains and tokens for bridge
-  const supportedChains = getSupportedChains();
-  const supportedTokens = getSupportedTokens();
-  const supportedSourceTokens = getSupportedSourceTokens();
+  // const supportedChains = getSupportedChains();
+  // const supportedTokens = getSupportedTokens();
+  // const supportedSourceTokens = getSupportedSourceTokens();
 
   // Progress simulation effect for transactions
   useEffect(() => {
@@ -83,24 +83,7 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
     }
   }, [transactionLoading]);
 
-  // Progress simulation effect for bridge
-  useEffect(() => {
-    if (bridgeLoading) {
-      setBridgeProgress(0);
-      setBridgeResult(null);
-      const progressInterval = setInterval(() => {
-        setBridgeProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return 90;
-          }
-          return prev + 10;
-        });
-      }, 800);
 
-      return () => clearInterval(progressInterval);
-    }
-  }, [bridgeLoading]);
 
   // Generate QR code when address is available
   useEffect(() => {
@@ -198,72 +181,7 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
     }
   };
 
-  const handleBridgeTransaction = async () => {
-    if (!bridgeForm.amount || !bridgeForm.recipientAddress || !bridgeForm.destChain) {
-      toast({
-        title: "Invalid input",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      });
-      return;
-    }
 
-    if (!stellarAddress?.stellar_address) {
-      toast({
-        title: "Address not available",
-        description: "Stellar address is required for bridge operations",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setBridgeLoading(true);
-    setBridgeProgress(0);
-    setBridgeResult(null);
-    
-    try {
-      console.log('🔒 Starting bridge transaction...');
-      
-      const lockParams = {
-        userAddress: stellarAddress.stellar_address, // Use current user's Stellar address
-        fromToken: bridgeForm.fromToken, // XLM (native Stellar)
-        destToken: bridgeForm.destToken,
-        amount: parseFloat(bridgeForm.amount),
-        destChain: bridgeForm.destChain,
-        recipientAddress: bridgeForm.recipientAddress
-      };
-
-      // Execute bridge transaction using service (with backend integration)
-      const result = await executeBridgeTransaction(
-        lockParams,
-        selectedNetwork || 'testnet',
-        setBridgeProgress,
-        actor // Pass actor for backend integration
-      );
-      
-      setBridgeResult(result);
-      
-      toast({
-        title: "Bridge successful!",
-        description: `Bridging ${bridgeForm.amount} ${bridgeForm.destToken} to ${result.bridgeDetails?.toChain}`,
-      });
-      
-    } catch (error: any) {
-      console.error('Bridge error:', error);
-      setBridgeProgress(0);
-      setBridgeResult({ 
-        success: false, 
-        message: error.message || "Bridge transaction failed" 
-      });
-      toast({
-        title: "Bridge failed",
-        description: error.message || "An unexpected error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setBridgeLoading(false);
-    }
-  };
 
   const handleCopyAddress = async () => {
     if (!stellarAddress?.stellar_address) return;
@@ -314,7 +232,13 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
       icon: ArrowLeftRight,
       gradient: "from-purple-500 to-pink-500",
       hoverGradient: "hover:from-purple-500/80 hover:to-pink-500/80",
-      onClick: () => setShowSwapModal(true),
+      onClick: () => {
+        if (selectedNetwork === "stellar-testnet") {
+          showComingSoon("Testnet Trading");
+        } else {
+          setShowSwapModal(true);
+        }
+      },
       disabled: !stellarAddress?.stellar_address || !actor
     },
     {
@@ -322,7 +246,13 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
       icon: Repeat,
       gradient: "from-teal-500 to-cyan-500",
       hoverGradient: "hover:from-teal-500/80 hover:to-cyan-500/80",
-      onClick: () => setShowTokensModal(true),
+      onClick: () => {
+        if (selectedNetwork === "stellar-testnet") {
+          showComingSoon("Testnet Token Balances");
+        } else {
+          setShowTokensModal(true);
+        }
+      },
       disabled: !stellarAddress?.stellar_address || !actor
     },
     {
@@ -330,8 +260,8 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
       icon: GitBranch,
       gradient: "from-indigo-500 to-purple-500",
       hoverGradient: "hover:from-indigo-500/80 hover:to-purple-500/80",
-      onClick: () => setShowBridgeModal(true),
-      disabled: !stellarAddress?.stellar_address
+      onClick: () => showComingSoon("Bridge"),
+      disabled: false
     }
   ];
 
@@ -969,7 +899,7 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
                     Cancel
                   </Button>
                   <Button
-                    onClick={handleBridgeTransaction}
+                    onClick={()=>{console.log("Bridge Tokens")}}
                     disabled={bridgeLoading || !bridgeForm.amount || !bridgeForm.recipientAddress}
                     className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-sm"
                   >

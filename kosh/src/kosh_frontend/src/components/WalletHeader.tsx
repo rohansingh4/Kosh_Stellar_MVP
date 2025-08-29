@@ -12,7 +12,7 @@ interface WalletHeaderProps {
   onNetworkChange?: (network: string) => void;
 }
 
-const WalletHeader = ({ principal, onLogout, selectedNetwork = "stellar-testnet", onNetworkChange }: WalletHeaderProps) => {
+const WalletHeader = ({ principal, onLogout, selectedNetwork = "stellar-mainnet", onNetworkChange }: WalletHeaderProps) => {
   const [showSettings, setShowSettings] = useState(false);
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();

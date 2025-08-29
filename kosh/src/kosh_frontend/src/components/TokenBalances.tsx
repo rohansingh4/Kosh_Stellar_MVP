@@ -43,7 +43,7 @@ const TokenBalances = ({ actor, selectedNetwork, onAddTrustline, stellarAddress 
 
     setLoading(true);
     try {
-      const networkType = getNetworkType(selectedNetwork || "stellar-testnet");
+      const networkType = getNetworkType(selectedNetwork || "stellar-mainnet");
       const result = await actor.get_account_assets([networkType]);
 
       console.log('Assets result:', result);

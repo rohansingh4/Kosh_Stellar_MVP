@@ -60,7 +60,7 @@ const TrustlineManager = ({ actor, stellarAddress, selectedNetwork, onTrustlineC
 
     setLoadingTrustlines(true);
     try {
-      const networkType = getNetworkType(selectedNetwork || "stellar-testnet");
+      const networkType = getNetworkType(selectedNetwork || "stellar-mainnet");
       
       // Get account assets from Stellar API
       const assetsResult = await checkTrustline(
@@ -99,7 +99,7 @@ const TrustlineManager = ({ actor, stellarAddress, selectedNetwork, onTrustlineC
 
     setLoading(true);
     try {
-      const networkType = getNetworkType(selectedNetwork || "stellar-testnet");
+      const networkType = getNetworkType(selectedNetwork || "stellar-mainnet");
       const limitArray = limit ? [limit] : [];
       
       const result = await actor.create_trustline(
@@ -153,7 +153,7 @@ const TrustlineManager = ({ actor, stellarAddress, selectedNetwork, onTrustlineC
 
     setLoading(true);
     try {
-      const networkType = getNetworkType(selectedNetwork || "stellar-testnet");
+      const networkType = getNetworkType(selectedNetwork || "stellar-mainnet");
       
       const result = await actor.create_trustline(
         assetCode, 
@@ -452,7 +452,7 @@ const TrustlineManager = ({ actor, stellarAddress, selectedNetwork, onTrustlineC
                         variant="ghost"
                         size="sm"
                         onClick={() => window.open(
-                          `https://stellar.expert/explorer/${getNetworkType(selectedNetwork || "stellar-testnet")}/account/${trustline.asset_issuer}`,
+                          `https://stellar.expert/explorer/${getNetworkType(selectedNetwork || "stellar-mainnet")}/account/${trustline.asset_issuer}`,
                           '_blank'
                         )}
                       >
