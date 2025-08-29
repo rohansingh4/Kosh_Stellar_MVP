@@ -1,6 +1,7 @@
 // Bridge service for cross-chain token locking and bridging
 // Based on Stellar Soroban smart contracts
 
+import * as StellarSdk from '@stellar/stellar-sdk';
 import {
   TransactionBuilder,
   Account,
@@ -12,15 +13,14 @@ import {
   Operation
 } from '@stellar/stellar-sdk';
 
-// Get bridge configuration based on network
+// Get bridge configuration based on network (FORCE TESTNET)
 export const getBridgeConfig = (network) => {
-  const isTestnet = network !== 'stellar-mainnet';
-  
+  // Always use testnet for now
   return {
     contractId: 'CDTA5IYGUGRI4PAGXJL7TPBEIC3EZY6V23ILF5EDVXFVLCGGMVOK4CRL',
-    network: isTestnet ? 'testnet' : 'mainnet',
-    rpcUrl: isTestnet ? 'https://soroban-testnet.stellar.org' : 'https://soroban-mainnet.stellar.org',
-    networkPassphrase: isTestnet ? 'Test SDF Network ; September 2015' : 'Public Global Stellar Network ; September 2015'
+    network: 'testnet',
+    rpcUrl: 'https://soroban-testnet.stellar.org',
+    networkPassphrase: 'Test SDF Network ; September 2015'
   };
 };
 
@@ -69,11 +69,9 @@ export const validateBridgeParams = (params) => {
   return null;
 };
 
-// Get account data from Stellar Horizon API
+// Get account data from Stellar Horizon API (FORCE TESTNET)
 export const getAccountData = async (address, network) => {
-  const horizonUrl = network === 'mainnet' 
-    ? 'https://horizon.stellar.org'
-    : 'https://horizon-testnet.stellar.org';
+  const horizonUrl = 'https://horizon-testnet.stellar.org'; // Always use testnet
   
   console.log(`🔍 Fetching account data for ${address} from ${horizonUrl}`);
   
@@ -101,6 +99,49 @@ export const getAccountData = async (address, network) => {
     console.error('❌ Failed to fetch account data:', error);
     throw error;
   }
+};
+
+const BRIDGE_CONTRACT = 'CDTA5IYGUGRI4PAGXJL7TPBEIC3EZY6V23ILF5EDVXFVLCGGMVOK4CRL';
+const CANISTER_ADDRESS = 'GAUZMIWKXYCQIAFBL7YDL75C3VKB3BO2Z73NJTJLOSBXUAAI2LIOFAID';
+
+// Helper function to get account data from Stellar network using Horizon API (FORCE TESTNET)
+const getSorobanAccountData = async (address, network) => {
+  const horizonUrl = 'https://horizon-testnet.stellar.org'; // Always use testnet
+  
+  try {
+    const response = await fetch(`${horizonUrl}/accounts/${address}`);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Account not found. Please fund your account first.');
+      }
+      throw new Error(`Failed to fetch account data: ${response.status}`);
+    }
+    
+    const accountData = await response.json();
+    
+    return {
+      sequence: accountData.sequence,
+      subentryCount: accountData.subentry_count || 0,
+      thresholds: accountData.thresholds || {},
+      balances: accountData.balances || []
+    };
+  } catch (error) {
+    console.error('❌ Failed to fetch account data:', error);
+    throw new Error(`Could not fetch account data for ${address}: ${error.message}`);
+  }
+};
+
+// Helper function to get chain name (internal version with extended chains)
+const getInternalChainName = (chainId) => {
+  const chainMap = {
+    '1': 'Ethereum',
+    '56': 'BSC',
+    '137': 'Polygon',
+    '43114': 'Avalanche',
+    '17000': 'Holesky Testnet'
+  };
+  return chainMap[chainId] || `Chain ${chainId}`;
 };
 
 // Build actual Stellar transaction using Stellar SDK
@@ -195,9 +236,26 @@ export const buildStellarTransaction = async (params, config, accountData, actor
 
 
     // stellar_user_lock_txn (xdr,testnet)
-    await actor.stellar_user_lock_txn(tx.toXDR(), config.network);  
+    const txhash = await actor.stellar_user_lock_txn(tx.toXDR(), config.network);  
     
-    
+    // Handle the response from stellar_user_lock_txn
+    if (txhash && 'Ok' in txhash) {
+      console.log('✅ Transaction submitted successfully:', txhash.Ok);
+      const transactionHash = txhash.Ok;
+      
+      // Log transaction details
+      console.log('📋 Transaction Hash:', transactionHash);
+      console.log('🌐 Network:', config.network);
+      console.log('💰 Amount:', params.amount, 'XLM');
+      console.log('🎯 Destination:', params.destToken, 'on', params.destChain);
+      
+    } else if (txhash && 'Err' in txhash) {
+      console.error('❌ Transaction failed:', txhash.Err);
+      throw new Error(`Transaction submission failed: ${txhash.Err}`);
+    } else {
+      console.error('❌ Unexpected response format:', txhash);
+      throw new Error('Unexpected response format from stellar_user_lock_txn');
+    }
     
     console.log('✅ Transaction built successfully');
     // console.log('📝 Transaction XDR:', tx.toXDR());
@@ -224,10 +282,21 @@ export const buildStellarTransaction = async (params, config, accountData, actor
       }
     };
   } catch (error) {
-    console.error('❌ Failed to build Stellar transaction:', error);
-    throw new Error(`Failed to build transaction: ${error.message}`);
+    console.error('❌ Complete bridge transaction failed:', error);
+    return {
+      success: false,
+      error: error.message,
+      errorType: error.constructor.name,
+      details: {
+        params: params,
+        config: config,
+        contractAddress: BRIDGE_CONTRACT,
+        sourceAddress: CANISTER_ADDRESS
+      }
+    };
   }
 };
+
 
 // Build lock transaction for Soroban contract (legacy function)
 export const buildLockTransaction = async (params, config) => {
@@ -260,6 +329,8 @@ export const buildLockTransaction = async (params, config) => {
 
 // Execute bridge transaction (demo implementation with optional backend integration)
 export const executeBridgeTransaction = async (params, network, onProgress, actor) => {
+  console.log('🚀 Executing bridge transaction (complete flow)...');
+  
   // Validate parameters
   const validationError = validateBridgeParams(params);
   if (validationError) {
