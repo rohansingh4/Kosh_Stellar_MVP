@@ -101,36 +101,6 @@ export const getAccountData = async (address, network) => {
   }
 };
 
-const BRIDGE_CONTRACT = 'CDTA5IYGUGRI4PAGXJL7TPBEIC3EZY6V23ILF5EDVXFVLCGGMVOK4CRL';
-const CANISTER_ADDRESS = 'GAUZMIWKXYCQIAFBL7YDL75C3VKB3BO2Z73NJTJLOSBXUAAI2LIOFAID';
-
-// Helper function to get account data from Stellar network using Horizon API (FORCE TESTNET)
-const getSorobanAccountData = async (address, network) => {
-  const horizonUrl = 'https://horizon-testnet.stellar.org'; // Always use testnet
-  
-  try {
-    const response = await fetch(`${horizonUrl}/accounts/${address}`);
-    
-    if (!response.ok) {
-      if (response.status === 404) {
-        throw new Error('Account not found. Please fund your account first.');
-      }
-      throw new Error(`Failed to fetch account data: ${response.status}`);
-    }
-    
-    const accountData = await response.json();
-    
-    return {
-      sequence: accountData.sequence,
-      subentryCount: accountData.subentry_count || 0,
-      thresholds: accountData.thresholds || {},
-      balances: accountData.balances || []
-    };
-  } catch (error) {
-    console.error('❌ Failed to fetch account data:', error);
-    throw new Error(`Could not fetch account data for ${address}: ${error.message}`);
-  }
-};
 
 // Helper function to get chain name (internal version with extended chains)
 const getInternalChainName = (chainId) => {
@@ -144,6 +114,11 @@ const getInternalChainName = (chainId) => {
   return chainMap[chainId] || `Chain ${chainId}`;
 };
 
+const HORIZON_URL = "https://horizon-testnet.stellar.org";
+
+// Source account (public key only). Replace if you want a different account.
+
+
 // Build actual Stellar transaction using Stellar SDK
 export const buildStellarTransaction = async (params, config, accountData, actor) => {
   console.log('🔒 Building Stellar transaction with SDK...');
@@ -153,8 +128,17 @@ export const buildStellarTransaction = async (params, config, accountData, actor
   
   try {
     // Create Account object from account data
-    const account = new Account(params.userAddress, accountData.sequence.toString());
-    account.incrementSequenceNumber();
+    console.log("USER_ADDRESS," ,params.userAddress);
+   
+    const acctResp = await fetch(`${HORIZON_URL}/accounts/${params.userAddress}`);
+    if (!acctResp.ok) {
+      const txt = await acctResp.text().catch(() => "");
+      throw new Error(`Failed to fetch account from Horizon: ${acctResp.status} ${acctResp.statusText} ${txt}`);
+    }
+    const acctJson = await acctResp.json();
+    const seq = acctJson.sequence;
+    const account = new Account(params.userAddress, seq);
+
     console.log('👤 Account created:', { accountId: account.accountId(), sequence: account.sequenceNumber() });
     
     // Create Contract object for the bridge contract

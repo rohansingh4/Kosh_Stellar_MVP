@@ -104,6 +104,8 @@ fn greet(name: String) -> String {
 
 #[ic_cdk::update]
 async fn public_key_stellar() -> Result<String, String> {
+
+    ic_cdk::println!("ic_cdk::api::caller().as_slice().to_vec() {:?}",ic_cdk::api::caller().as_slice().to_vec());
     let request = ManagementCanisterSchnorrPublicKeyRequest {
         canister_id: None,
         derivation_path: vec![ic_cdk::api::caller().as_slice().to_vec()],
@@ -241,6 +243,8 @@ async fn sign_transaction_stellar(xdr_base64: String, network: String) -> Result
         ic_cdk::println!("Transaction hash to sign: {}", hex::encode(&hash));
 
         // Get the public key first
+
+        ic_cdk::println!("ic_cdk::api::caller {:?}",ic_cdk::api::caller().as_slice().to_vec());
         let pubkey_request = ManagementCanisterSchnorrPublicKeyRequest {
             canister_id: None,
             derivation_path: vec![ic_cdk::api::caller().as_slice().to_vec()],
