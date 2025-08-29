@@ -182,7 +182,7 @@ async fn sign_transaction_stellar(xdr_base64: String, network: &str) -> Result<S
             tagged_transaction,
         };
 
-        // Serialize the payload to get the bytes to sign
+        // Serialize the payload to get the by
         let mut payload_bytes = Vec::new();
         let mut limited_writer = Limited::new(&mut payload_bytes, limits.clone());
         payload.write_xdr(&mut limited_writer)
