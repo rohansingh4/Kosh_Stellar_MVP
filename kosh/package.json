@@ -14,5 +14,8 @@
   "type": "module",
   "workspaces": [
     "src/kosh_frontend"
-  ]
+  ],
+  "dependencies": {
+    "@types/node": "^24.3.0"
+  }
 }

@@ -10,8 +10,10 @@ import {
   nativeToScVal,
   Address,
   Networks,
-  Operation
+  Operation,
+  Asset
 } from '@stellar/stellar-sdk';
+import { Server } from '@stellar/stellar-sdk/rpc';
 
 // Get bridge configuration based on network (FORCE TESTNET)
 export const getBridgeConfig = (network) => {
@@ -102,203 +104,152 @@ export const getAccountData = async (address, network) => {
 };
 
 
-// Helper function to get chain name (internal version with extended chains)
-const getInternalChainName = (chainId) => {
-  const chainMap = {
-    '1': 'Ethereum',
-    '56': 'BSC',
-    '137': 'Polygon',
-    '43114': 'Avalanche',
-    '17000': 'Holesky Testnet'
+
+// Generate raw XDR transaction with hardcoded values (returns detailed object)
+export const generateRawXDRDetailed = async (userAddress) => {
+  // === constants ===
+  const DEFAULT_BRIDGE = "CDTA5IYGUGRI4PAGXJL7TPBEIC3EZY6V23ILF5EDVXFVLCGGMVOK4CRL";
+  const DEFAULT_USER = "GBYFX3H3CNAFMTVVZUFXITC7LJTDYZVMJD5XMWQPEMW4ORN43QPGQ3OZ";
+
+  // --- read inputs ---
+  const RPC_URL = "https://soroban-testnet.stellar.org";
+  const BRIDGE_ID = DEFAULT_BRIDGE;
+  const USER_ADDRESS = userAddress || DEFAULT_USER;
+
+  const DEST_TOKEN = "native";
+  const IN_AMOUNT_STR = "17000";
+  const RECIPIENT_ADDRESS = "0x742d35Cc6634C0532925a3b8D29435B7b6c8ceB3";
+  const DEST_CHAIN_IN = "0x8Da1867ab5eE5385dc72f5901bC9Bd16F580d157";
+  let FROM_TOKEN_ADDR; // Will be set to native SAC
+
+  // --- helpers ---
+  const hexToBytes = (hex) => {
+    let s = hex.toLowerCase().replace(/^0x/, "");
+    if (!/^[0-9a-f]*$/.test(s) || s.length % 2) throw new Error("Invalid hex for --dest-chain");
+    const out = new Uint8Array(s.length / 2);
+    for (let i = 0; i < s.length; i += 2) out[i / 2] = parseInt(s.slice(i, i + 2), 16);
+    return out;
   };
-  return chainMap[chainId] || `Chain ${chainId}`;
+  
+  const toBytes = (val) => {
+    if (typeof val !== "string") throw new Error("--dest-chain must be a string");
+    if (val.startsWith("0x") || /^[0-9a-fA-F]+$/.test(val.replace(/^0x/, ""))) {
+      try { return hexToBytes(val); } catch { /* fallthrough to utf-8 */ }
+    }
+    return new TextEncoder().encode(val);
+  };
+
+  try {
+    const server = new Server(RPC_URL, { allowHttp: RPC_URL.startsWith("http://") });
+
+    // Validate addresses before using them
+    console.log("Validating addresses:");
+    console.log("USER_ADDRESS:", USER_ADDRESS);
+    console.log("BRIDGE_ID:", BRIDGE_ID);
+    
+    try {
+      new Address(USER_ADDRESS);
+      console.log("✓ USER_ADDRESS is valid");
+    } catch (e) {
+      throw new Error(`Invalid USER_ADDRESS: ${USER_ADDRESS} - ${e.message}`);
+    }
+    
+    try {
+      new Address(BRIDGE_ID);
+      console.log("✓ BRIDGE_ID is valid");
+    } catch (e) {
+      throw new Error(`Invalid BRIDGE_ID: ${BRIDGE_ID} - ${e.message}`);
+    }
+
+    // Discover network passphrase from RPC and load the source account/sequence.
+    const { passphrase: networkPassphrase } = await server.getNetwork();
+    const account = await server.getAccount(USER_ADDRESS);
+
+    // If not provided, use this network's **XLM Stellar Asset Contract** as the from_token.
+    if (!FROM_TOKEN_ADDR) {
+      FROM_TOKEN_ADDR = Asset.native().contractId(networkPassphrase);
+    }
+
+    // Prepare contract + args (matching Rust signature order exactly):
+    // lock(env, from: Address, from_token: Address, dest_token: String,
+    //      in_amount: i128, dest_chain: Bytes, recipient_address: String)
+    const contract = new Contract(BRIDGE_ID);
+
+    const from = new Address(USER_ADDRESS);
+    const fromToken = new Address(FROM_TOKEN_ADDR);
+    const destTokenStr = DEST_TOKEN;
+    const inAmountI128 = nativeToScVal(IN_AMOUNT_STR, { type: "i128" }); // Convert string to i128 ScVal
+    const destChain = toBytes(DEST_CHAIN_IN);
+    const recipientStr = RECIPIENT_ADDRESS;
+
+    const op = contract.call(
+      "lock",
+      nativeToScVal(from),                // Address -> ScVal
+      nativeToScVal(fromToken),           // Address -> ScVal  
+      nativeToScVal(destTokenStr),        // String  -> ScVal
+      inAmountI128,                       // i128    -> ScVal
+      nativeToScVal(destChain),           // Bytes   -> ScVal
+      nativeToScVal(recipientStr),        // String  -> ScVal
+    );
+
+    // Build a tx with your USER as the transaction source.
+    let tx = new TransactionBuilder(account, {
+      fee: String(BASE_FEE),              // base fee; resource fee will be added during prepare
+      networkPassphrase,
+    })
+      .addOperation(op)
+      .setTimeout(300)
+      .build();
+
+    // Simulate + prepare: fills in the footprint, resource fees, and any required authorizations.
+    // The result is still UNSIGNED.
+    tx = await server.prepareTransaction(tx);
+
+    console.log("----- prepared (UNSIGNED) transaction XDR -----");
+    console.log(tx.toXDR());              // base64-encoded, ready to sign elsewhere
+    console.log("------------------------------------------------");
+    console.error(JSON.stringify({
+      rpc: RPC_URL,
+      networkPassphrase,
+      source: USER_ADDRESS,
+      bridgeContract: BRIDGE_ID,
+      fromToken: FROM_TOKEN_ADDR,
+      destToken: DEST_TOKEN,
+      inAmount: IN_AMOUNT_STR,
+      destChainBytesLen: destChain.length,
+      recipient: RECIPIENT_ADDRESS,
+    }, null, 2));
+
+    return {
+      xdr: tx.toXDR(),
+      transaction: tx,
+      networkPassphrase,
+      contractId: BRIDGE_ID,
+      userAddress: USER_ADDRESS,
+      details: {
+        fromToken: FROM_TOKEN_ADDR,
+        destToken: DEST_TOKEN,
+        amount: IN_AMOUNT_STR,
+        recipient: RECIPIENT_ADDRESS,
+        destChain: DEST_CHAIN_IN
+      }
+    };
+  } catch (e) {
+    console.error("Error building XDR:", e?.response?.data ?? e);
+    throw e;
+  }
 };
 
-const HORIZON_URL = "https://horizon-testnet.stellar.org";
+// Generate raw XDR transaction with hardcoded values (returns just XDR string)
+export const generateRawXDR = async (userAddress) => {
+  const result = await generateRawXDRDetailed(userAddress);
+  return result.xdr;
+};
 
-// Source account (public key only). Replace if you want a different account.
-
-
-// Build actual Stellar transaction using Stellar SDK
+// Legacy function for backward compatibility  
 export const buildStellarTransaction = async (params, config, accountData, actor) => {
-  console.log('🔒 Building Stellar transaction with SDK...');
-  console.log('📊 Parameters:', params);
-  console.log('📋 Config:', config);
-  console.log('💰 Account data:', accountData);
-  
-  try {
-    // Create Account object from account data
-    console.log("USER_ADDRESS," ,params.userAddress);
-   
-    const acctResp = await fetch(`${HORIZON_URL}/accounts/${params.userAddress}`);
-    if (!acctResp.ok) {
-      const txt = await acctResp.text().catch(() => "");
-      throw new Error(`Failed to fetch account from Horizon: ${acctResp.status} ${acctResp.statusText} ${txt}`);
-    }
-    const acctJson = await acctResp.json();
-    const seq = acctJson.sequence;
-    const account = new Account(params.userAddress, seq);
-
-    console.log('👤 Account created:', { accountId: account.accountId(), sequence: account.sequenceNumber() });
-    
-    // Create Contract object for the bridge contract
-    console.log("Config => ",config);
-    const contract = new Contract(config.contractId);
-    console.log('📋 Contract created:', config.contractId);
-    
-    // Get network passphrase
-    const networkPassphrase = config.network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
-    console.log('🌐 Network passphrase:', networkPassphrase);
-    
-    // Convert amount to stroops (1 XLM = 10,000,000 stroops)
-    const amountStroops = String(Math.floor(params.amount * 10_000_000));
-    console.log('💰 Amount in stroops:', amountStroops);
-    
-    // For Stellar native XLM, use the native asset address
-    // const nativeAssetAddress = Address.fromString('CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQAHHAGCN4B2');
-    // console.log('🪙 Native asset address:', nativeAssetAddress.toString());
-    
-    // Build the transaction using TransactionBuilder
-    const txBuilder = new TransactionBuilder(account, {
-      fee: String(BASE_FEE),
-      networkPassphrase: Networks.TESTNET,
-    });
-
-    // Add a manageData entry for the contract id (from_token)
-    txBuilder.addOperation(
-      Operation.manageData({
-        name: "contract_id", // metadata key
-        value: config.contractId,
-      })
-    );
-
-    // Add a manageData entry for dest_token
-    txBuilder.addOperation(
-      Operation.manageData({
-        name: "dest_token",
-        value: params.destToken,
-      })
-    );
-
-    // Add a manageData entry for in_amount
-    txBuilder.addOperation(
-      Operation.manageData({
-        name: "in_amount",
-        value: amountStroops,
-      })
-    );
-
-    // Add a manageData entry for dest_chain (store ASCII)
-    txBuilder.addOperation(
-      Operation.manageData({
-        name: "dest_chain",
-        // convert to ASCII
-        value: params.destChain,
-      })
-    );
-
-    // Add a manageData entry for recipient address
-    txBuilder.addOperation(
-      Operation.manageData({
-        name: "recipient_address",
-        value: params.recipientAddress,
-      })
-    );
-
-    // Add an operation that marks intent to call 'lock' (purely descriptive)
-    txBuilder.addOperation(
-      Operation.manageData({
-        name: "intent",
-        value: "call_lock",
-      })
-    );
-
-
-    // Finalize transaction (unsigned)
-    const tx = txBuilder.setTimeout(180).build();
-    console.log("XDR=>",tx.toXDR());
-
-
-    // stellar_user_lock_txn (xdr,testnet)
-    const response1 = await actor.stellar_user_lock_txn(tx.toXDR(), config.network);  
-    // Handle the response from stellar_user_lock_txn
-    const response = JSON.parse(response1.Ok);
-    let transactionResult = null;
-    if (response) {
-      console.log('✅ Transaction submitted successfully:', response);
-      
-      // Extract transaction details from response
-      const transactionHash = response.hash;
-      const explorerUrl = response.explorer_url;
-
-      const rawResponse = JSON.parse(response.raw_response);
-      
-      
-      // Prepare transaction result for frontend display
-      transactionResult = {
-        success: true,
-        hash: transactionHash,
-        explorerUrl: explorerUrl,
-        ledger: rawResponse?.ledger,
-        feeCharged: rawResponse?.fee_charged,
-        createdAt: rawResponse?.created_at,
-        sourceAccount: rawResponse?.source_account,
-        operationCount: rawResponse?.operation_count,
-        bridgeDetails: {
-          fromToken: 'XLM',
-          toToken: params?.destToken,
-          amount: params?.amount,
-          destChain: params?.destChain,
-          recipientAddress: params?.recipientAddress
-        }
-      };
-      
-    } else if (txhash) {
-      console.error('❌ Transaction failed:', txhash?.Err);
-      throw new Error(`Transaction submission failed: ${txhash?.Err}`);
-    } else {
-      console.error('❌ Unexpected response format:', txhash);
-      throw new Error('Unexpected response format from stellar_user_lock_txn');
-    }
-    
-    console.log('✅ Transaction built successfully');
-    // console.log('📝 Transaction XDR:', tx.toXDR());
-    
-    return {
-      transactionXDR: tx.toXDR(),
-      transactionResult: transactionResult, // Include the transaction result for frontend display
-      contractCall: {
-        contractId: config?.contractId,
-        method: 'lock',
-        parameters: {
-          user: params?.userAddress,
-          fromToken: 'native', // XLM native
-          destToken: params?.destToken,
-          amount: amountStroops,
-          destChain: params?.destChain,
-          recipientAddress: params?.recipientAddress
-        }
-      },
-      networkConfig: {
-        network: config?.network,
-        networkPassphrase: networkPassphrase,
-        rpcUrl: config?.rpcUrl
-      }
-    };
-  } catch (error) {
-    console.error('❌ Complete bridge transaction failed:', error);
-    return {
-      success: false,
-      error: error?.message,
-      errorType: error?.constructor?.name,
-      details: {
-        params: params,
-        config: config,
-        contractAddress: config?.contractId,
-        sourceAddress: config.sourceAddress
-      }
-    };
-  }
+  console.warn('buildStellarTransaction is deprecated, use generateRawXDR instead');
+  return await generateRawXDR(params.userAddress);
 };
 
 
@@ -365,7 +316,10 @@ export const executeBridgeTransaction = async (params, network, onProgress, acto
     console.log('🔨 Building Soroban contract transaction...');
     
     // Build the actual Stellar transaction using Stellar SDK
-    const { transactionXDR, contractCall, networkConfig } = await buildStellarTransaction(params, config, accountData, actor);
+    const result = await generateRawXDRDetailed(params.userAddress);
+    const transactionXDR = result.xdr;
+    const contractCall = { contractId: result.contractId, method: 'lock' };
+    const networkConfig = { network: config.network };
     
     console.log('✅ Transaction built on frontend:', {
       contractId: contractCall?.contractId,
@@ -524,6 +478,8 @@ export default {
   getChainName,
   validateBridgeParams,
   getAccountData,
+  generateRawXDR,
+  generateRawXDRDetailed,
   buildStellarTransaction,
   buildLockTransaction,
   executeBridgeTransaction,

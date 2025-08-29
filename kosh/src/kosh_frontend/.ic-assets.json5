@@ -2,7 +2,7 @@
   {
     "match": "**/*",
     "headers": {
-      "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http://localhost:* https://icp0.io https://*.icp0.io https://icp-api.io https://api.coingecko.com https://horizon-testnet.stellar.org https://horizon.stellar.org; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self';"
+      "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http://localhost:* https://icp0.io https://*.icp0.io https://icp-api.io https://api.coingecko.com https://horizon-testnet.stellar.org https://horizon.stellar.org https://soroban-testnet.stellar.org; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self';"
     }
   }
 ]
