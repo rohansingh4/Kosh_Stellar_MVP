@@ -1,150 +1,97 @@
-import { useState } from "react";
-import { Card } from "@/components/ui/card";
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, AlertTriangle, CheckCircle, RefreshCw } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { 
+  Plus, 
+  Trash2, 
+  Search, 
+  AlertTriangle, 
+  CheckCircle, 
+  RefreshCw,
+  ExternalLink,
+  Info
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-// Popular Stellar assets for quick trustline creation
-const POPULAR_ASSETS = [
-  {
-    code: 'USDC',
-    issuer: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
-    name: 'USD Coin',
-    icon: '💵',
-    description: 'US Dollar stablecoin'
-  },
-  {
-    code: 'USDT',
-    issuer: 'GCQTGZQQ5G4PTM2GL7CDIFKUBIPEC52BROAQIAPW53XBRJVN6ZJVTG6V',
-    name: 'Tether USD',
-    icon: '💰',
-    description: 'US Dollar stablecoin'
-  },
-  {
-    code: 'AQUA',
-    issuer: 'GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA',
-    name: 'Aquarius',
-    icon: '🌊',
-    description: 'AMM and voting token'
-  },
-  {
-    code: 'yXLM',
-    issuer: 'GARDNV3Q7YGT4AKSDF25LT32YSCCW67G2P2OBKQP5PMPOUF2FIKW7SSP',
-    name: 'yXLM',
-    icon: '⭐',
-    description: 'Yield-bearing XLM'
-  },
-  {
-    code: 'SRT',
-    issuer: 'GCDNJUBQSX7AJWLJACMJ7I4BC3Z47BQUTMHEICZLE6MU4KQBRYG5JY6B',
-    name: 'SmartLands',
-    icon: '🏢',
-    description: 'Real estate tokenization'
-  },
-];
+import { stellarTokens, findToken } from "../data/stellarTokens";
+import { StellarToken, TrustlineInfo } from "../types/stellar";
+import { checkTrustline } from "../lib/stellarApi";
 
 interface TrustlineManagerProps {
   actor?: any;
-  selectedNetwork?: string;
   stellarAddress?: any;
-  onTrustlineCreated?: () => void;
+  selectedNetwork?: string;
+  onTrustlineChange?: () => void;
 }
 
-const TrustlineManager = ({ actor, selectedNetwork, stellarAddress, onTrustlineCreated }: TrustlineManagerProps) => {
-  const [assetCode, setAssetCode] = useState("");
-  const [assetIssuer, setAssetIssuer] = useState("");
-  const [trustLimit, setTrustLimit] = useState("");
-  const [selectedAsset, setSelectedAsset] = useState<string>("");
+const TrustlineManager = ({ actor, stellarAddress, selectedNetwork, onTrustlineChange }: TrustlineManagerProps) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedToken, setSelectedToken] = useState<StellarToken | null>(null);
+  const [customAssetCode, setCustomAssetCode] = useState("");
+  const [customAssetIssuer, setCustomAssetIssuer] = useState("");
+  const [trustlineLimit, setTrustlineLimit] = useState("");
+  const [existingTrustlines, setExistingTrustlines] = useState<TrustlineInfo[]>([]);
   const [loading, setLoading] = useState(false);
-  const [checkingTrustline, setCheckingTrustline] = useState(false);
-  const [trustlineExists, setTrustlineExists] = useState<boolean | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [loadingTrustlines, setLoadingTrustlines] = useState(false);
   const { toast } = useToast();
 
   const getNetworkType = (network: string) => {
     if (network === "stellar-mainnet") return "mainnet";
-    if (network === "base-mainnet") return "base";
     return "testnet";
   };
 
-  const handlePopularAssetSelect = (assetId: string) => {
-    const asset = POPULAR_ASSETS.find(a => a.code === assetId);
-    if (asset) {
-      setAssetCode(asset.code);
-      setAssetIssuer(asset.issuer);
-      setSelectedAsset(assetId);
-      setTrustlineExists(null);
-    }
-  };
+  // Filter tokens based on search
+  const filteredTokens = stellarTokens.filter(token =>
+    token.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    token.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    token.issuer.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const checkTrustline = async () => {
-    if (!assetCode || !assetIssuer || !actor) {
-      toast({
-        title: "Missing Information",
-        description: "Please enter asset code and issuer",
-        variant: "destructive",
-      });
-      return;
-    }
+  // Load existing trustlines
+  const loadTrustlines = async () => {
+    if (!stellarAddress?.stellar_address) return;
 
-    setCheckingTrustline(true);
+    setLoadingTrustlines(true);
     try {
       const networkType = getNetworkType(selectedNetwork || "stellar-testnet");
-      const result = await actor.check_trustline(assetCode, assetIssuer, [networkType]);
+      
+      // Get account assets from Stellar API
+      const assetsResult = await checkTrustline(
+        stellarAddress.stellar_address,
+        "", // Empty to get all assets
+        "",
+        networkType
+      );
 
-      console.log('Trustline check result:', result);
-
-      if (result.Ok) {
-        const trustlineData = JSON.parse(result.Ok);
-        if (trustlineData.success) {
-          setTrustlineExists(trustlineData.exists);
-          
-          if (trustlineData.exists) {
-            toast({
-              title: "Trustline Exists ✅",
-              description: `You already have a trustline for ${assetCode}`,
-            });
-          } else {
-            toast({
-              title: "Trustline Not Found",
-              description: `No trustline found for ${assetCode}. You can create one.`,
-            });
-          }
-        } else {
-          throw new Error(trustlineData.error || "Failed to check trustline");
-        }
-      } else {
-        throw new Error(result.Err || "Failed to check trustline");
+      if (assetsResult.success) {
+        // This would need to be modified to return all trustlines, not just check one
+        // For now, we'll simulate getting trustlines
+        setExistingTrustlines([]);
       }
     } catch (error) {
-      console.error('Error checking trustline:', error);
-      toast({
-        title: "Check Failed",
-        description: `${error}`,
-        variant: "destructive",
-      });
+      console.error('Error loading trustlines:', error);
     } finally {
-      setCheckingTrustline(false);
+      setLoadingTrustlines(false);
     }
   };
 
-  const createTrustline = async () => {
-    if (!assetCode || !assetIssuer || !actor || !stellarAddress?.stellar_address) {
-      toast({
-        title: "Cannot Create Trustline",
-        description: "Missing required information",
-        variant: "destructive",
-      });
-      return;
-    }
+  useEffect(() => {
+    loadTrustlines();
+  }, [stellarAddress, selectedNetwork]);
 
-    if (trustlineExists === true) {
+  // Create trustline
+  const createTrustline = async (assetCode: string, assetIssuer: string, limit?: string) => {
+    if (!actor || !stellarAddress?.stellar_address) {
       toast({
-        title: "Trustline Already Exists",
-        description: `You already have a trustline for ${assetCode}`,
+        title: "Error",
+        description: "Wallet not connected",
         variant: "destructive",
       });
       return;
@@ -153,63 +100,45 @@ const TrustlineManager = ({ actor, selectedNetwork, stellarAddress, onTrustlineC
     setLoading(true);
     try {
       const networkType = getNetworkType(selectedNetwork || "stellar-testnet");
+      const limitArray = limit ? [limit] : [];
+      
       const result = await actor.create_trustline(
-        assetCode,
-        assetIssuer,
-        trustLimit ? [trustLimit] : [],
+        assetCode, 
+        assetIssuer, 
+        limitArray,
         [networkType]
       );
-
-      console.log('Trustline creation result:', result);
 
       if (result.Ok) {
         const trustlineData = JSON.parse(result.Ok);
         if (trustlineData.success) {
-          // Show detailed success notification with transaction hash
-          const hashDisplay = trustlineData.hash ? `${trustlineData.hash.substring(0, 12)}...` : 'N/A';
           toast({
             title: "Trustline Created! ✅",
-            description: (
-              <div className="space-y-1">
-                <p>{trustlineData.message || `Trustline created for ${assetCode}`}</p>
-                <p className="text-xs font-mono">Hash: {hashDisplay}</p>
-                {trustlineData.explorer_url && (
-                  <p className="text-xs text-blue-400 cursor-pointer" 
-                     onClick={() => window.open(trustlineData.explorer_url, '_blank')}>
-                    View on Explorer →
-                  </p>
-                )}
-              </div>
-            ),
-            duration: 8000, // Show longer for transaction details
+            description: `Successfully created trustline for ${assetCode}`,
           });
           
-          // Log full transaction details
-          console.log('Trustline Transaction Hash:', trustlineData.hash);
-          console.log('Explorer URL:', trustlineData.explorer_url);
-          console.log('Transaction Details:', trustlineData.transaction_details);
-          
-          // Clear form
-          setAssetCode("");
-          setAssetIssuer("");
-          setTrustLimit("");
-          setSelectedAsset("");
-          setTrustlineExists(null);
-          
-          // Notify parent component
-          if (onTrustlineCreated) {
-            onTrustlineCreated();
+          // Refresh trustlines and notify parent
+          loadTrustlines();
+          if (onTrustlineChange) {
+            onTrustlineChange();
           }
+          
+          // Close dialog and reset form
+          setDialogOpen(false);
+          setSelectedToken(null);
+          setCustomAssetCode("");
+          setCustomAssetIssuer("");
+          setTrustlineLimit("");
         } else {
-          throw new Error(trustlineData.error || "Trustline creation failed");
+          throw new Error(trustlineData.error || "Failed to create trustline");
         }
       } else {
-        throw new Error(result.Err || "Trustline creation failed");
+        throw new Error(result.Err || "Failed to create trustline");
       }
     } catch (error) {
       console.error('Error creating trustline:', error);
       toast({
-        title: "Trustline Creation Failed",
+        title: "Failed to Create Trustline",
         description: `${error}`,
         variant: "destructive",
       });
@@ -218,191 +147,344 @@ const TrustlineManager = ({ actor, selectedNetwork, stellarAddress, onTrustlineC
     }
   };
 
-  const resetForm = () => {
-    setAssetCode("");
-    setAssetIssuer("");
-    setTrustLimit("");
-    setSelectedAsset("");
-    setTrustlineExists(null);
+  // Remove trustline (set limit to 0)
+  const removeTrustline = async (assetCode: string, assetIssuer: string) => {
+    if (!actor || !stellarAddress?.stellar_address) return;
+
+    setLoading(true);
+    try {
+      const networkType = getNetworkType(selectedNetwork || "stellar-testnet");
+      
+      const result = await actor.create_trustline(
+        assetCode, 
+        assetIssuer, 
+        ["0"], // Set limit to 0 to remove
+        [networkType]
+      );
+
+      if (result.Ok) {
+        const trustlineData = JSON.parse(result.Ok);
+        if (trustlineData.success) {
+          toast({
+            title: "Trustline Removed ✅",
+            description: `Successfully removed trustline for ${assetCode}`,
+          });
+          
+          loadTrustlines();
+          if (onTrustlineChange) {
+            onTrustlineChange();
+          }
+        } else {
+          throw new Error(trustlineData.error || "Failed to remove trustline");
+        }
+      } else {
+        throw new Error(result.Err || "Failed to remove trustline");
+      }
+    } catch (error) {
+      console.error('Error removing trustline:', error);
+      toast({
+        title: "Failed to Remove Trustline",
+        description: `${error}`,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateTrustline = () => {
+    if (selectedToken) {
+      createTrustline(selectedToken.symbol, selectedToken.issuer, trustlineLimit || undefined);
+    } else if (customAssetCode && customAssetIssuer) {
+      createTrustline(customAssetCode, customAssetIssuer, trustlineLimit || undefined);
+    } else {
+      toast({
+        title: "Missing Information",
+        description: "Please select a token or enter custom asset details",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
-    <Card className="p-6 bg-gradient-card backdrop-blur-md border-border/20 shadow-crypto">
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="text-center">
-          <h3 className="text-xl font-bold bg-gradient-to-r from-primary to-crypto-teal bg-clip-text text-transparent">
-            Manage Trustlines
-          </h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            Add trustlines to hold different Stellar tokens
-          </p>
-        </div>
-
-        {/* Popular Assets */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Popular Assets</Label>
-          <div className="grid grid-cols-1 gap-2">
-            {POPULAR_ASSETS.map((asset) => (
-              <Button
-                key={asset.code}
-                variant="outline"
-                onClick={() => handlePopularAssetSelect(asset.code)}
-                className={`justify-start h-auto p-3 ${
-                  selectedAsset === asset.code 
-                    ? 'border-primary bg-primary/5' 
-                    : 'border-border/20 hover:border-primary/40'
-                }`}
-              >
-                <div className="flex items-center gap-3 w-full">
-                  <span className="text-lg">{asset.icon}</span>
-                  <div className="flex-1 text-left">
-                    <div className="font-medium">{asset.code}</div>
-                    <div className="text-xs text-muted-foreground">{asset.description}</div>
-                  </div>
-                  {selectedAsset === asset.code && (
-                    <CheckCircle className="w-4 h-4 text-primary" />
-                  )}
-                </div>
-              </Button>
-            ))}
+    <Card className="bg-gradient-card backdrop-blur-md border-border/20">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-lg font-semibold">Trustline Manager</CardTitle>
+            <CardDescription>
+              Manage your Stellar asset trustlines to receive different tokens
+            </CardDescription>
           </div>
-        </div>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="gap-2">
+                <Plus className="w-4 h-4" />
+                Add Trustline
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden">
+              <DialogHeader>
+                <DialogTitle>Add New Trustline</DialogTitle>
+                <DialogDescription>
+                  Create a trustline to receive a specific Stellar asset
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-6">
+                {/* Popular Tokens */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Popular Tokens</Label>
+                  
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search tokens..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  
+                  {/* Token List */}
+                  <ScrollArea className="h-64 border border-border/20 rounded-lg p-2">
+                    <div className="space-y-2">
+                      {filteredTokens.map((token) => (
+                        <div
+                          key={`${token.symbol}-${token.issuer}`}
+                          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                            selectedToken?.issuer === token.issuer
+                              ? 'border-primary bg-primary/10'
+                              : 'border-border/20 hover:border-border/40'
+                          }`}
+                          onClick={() => {
+                            setSelectedToken(token);
+                            setCustomAssetCode("");
+                            setCustomAssetIssuer("");
+                          }}
+                        >
+                          <div className="flex items-center gap-3">
+                            {token.logoURI && (
+                              <img
+                                src={token.logoURI}
+                                alt={token.symbol}
+                                className="w-8 h-8 rounded-full"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{token.symbol}</span>
+                                <Badge variant="outline" className="text-xs">
+                                  {token.name}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {token.issuer}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
 
-        {/* Custom Asset Form */}
+                <Separator />
+
+                {/* Custom Asset */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Custom Asset</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="asset-code" className="text-xs">Asset Code</Label>
+                      <Input
+                        id="asset-code"
+                        placeholder="e.g., USDC"
+                        value={customAssetCode}
+                        onChange={(e) => {
+                          setCustomAssetCode(e.target.value.toUpperCase());
+                          setSelectedToken(null);
+                        }}
+                        maxLength={12}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="asset-issuer" className="text-xs">Asset Issuer</Label>
+                      <Input
+                        id="asset-issuer"
+                        placeholder="G..."
+                        value={customAssetIssuer}
+                        onChange={(e) => {
+                          setCustomAssetIssuer(e.target.value);
+                          setSelectedToken(null);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Trustline Limit */}
+                <div className="space-y-2">
+                  <Label htmlFor="trustline-limit" className="text-sm font-medium">
+                    Trustline Limit (Optional)
+                  </Label>
+                  <Input
+                    id="trustline-limit"
+                    type="number"
+                    placeholder="Leave empty for maximum limit"
+                    value={trustlineLimit}
+                    onChange={(e) => setTrustlineLimit(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Maximum amount of this asset you can hold. Leave empty for unlimited.
+                  </p>
+                </div>
+
+                {/* Info */}
+                <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                  <div className="text-xs text-blue-200">
+                    <p className="font-medium mb-1">About Trustlines</p>
+                    <p>
+                      Trustlines allow you to hold non-native assets on Stellar. 
+                      Creating a trustline means you trust the issuer to honor the asset.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    onClick={handleCreateTrustline}
+                    disabled={loading || (!selectedToken && (!customAssetCode || !customAssetIssuer))}
+                    className="flex-1"
+                  >
+                    {loading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Trustline
+                      </>
+                    )}
+                  </Button>
+                  <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </CardHeader>
+
+      <CardContent>
+        {/* Existing Trustlines */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <Label className="text-sm font-medium">Custom Asset</Label>
+            <h4 className="font-medium">Your Trustlines</h4>
             <Button
               variant="ghost"
               size="sm"
-              onClick={resetForm}
-              className="text-xs"
+              onClick={loadTrustlines}
+              disabled={loadingTrustlines}
             >
-              Clear Form
+              <RefreshCw className={`w-4 h-4 ${loadingTrustlines ? 'animate-spin' : ''}`} />
             </Button>
           </div>
-          
-          <div className="space-y-3">
-            <div>
-              <Label htmlFor="asset-code" className="text-sm">Asset Code</Label>
-              <Input
-                id="asset-code"
-                value={assetCode}
-                onChange={(e) => setAssetCode(e.target.value.toUpperCase())}
-                placeholder="e.g., USDC"
-                className="bg-card/50 border-border/20"
-                maxLength={12}
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="asset-issuer" className="text-sm">Asset Issuer</Label>
-              <Input
-                id="asset-issuer"
-                value={assetIssuer}
-                onChange={(e) => setAssetIssuer(e.target.value)}
-                placeholder="Stellar address of the asset issuer"
-                className="bg-card/50 border-border/20 font-mono text-xs"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="trust-limit" className="text-sm">Trust Limit (Optional)</Label>
-              <Input
-                id="trust-limit"
-                type="number"
-                value={trustLimit}
-                onChange={(e) => setTrustLimit(e.target.value)}
-                placeholder="Maximum amount to hold (leave empty for max)"
-                className="bg-card/50 border-border/20 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&]:[-moz-appearance:textfield]"
-                step="0.0000001"
-                min="0"
-              />
-            </div>
-          </div>
-        </div>
 
-        {/* Trustline Status */}
-        {assetCode && assetIssuer && (
-          <div className="p-4 bg-card/30 border border-border/20 rounded-lg">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium">Trustline Status</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={checkTrustline}
-                disabled={checkingTrustline}
-              >
-                {checkingTrustline ? (
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                ) : (
-                  "Check Status"
-                )}
-              </Button>
+          {loadingTrustlines ? (
+            <div className="text-center py-8">
+              <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">Loading trustlines...</p>
             </div>
-            
-            {trustlineExists !== null && (
-              <div className="flex items-center gap-2">
-                {trustlineExists ? (
-                  <>
-                    <CheckCircle className="w-4 h-4 text-success" />
-                    <Badge className="bg-success/20 text-success border-success/30">
-                      Trustline Exists
-                    </Badge>
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle className="w-4 h-4 text-amber-500" />
-                    <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30">
-                      No Trustline
-                    </Badge>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Warning */}
-        <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-          <AlertTriangle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-          <div className="text-xs text-blue-200">
-            <p className="font-medium">Trustline Management Ready:</p>
-            <p>Trustline creation and verification functionality is fully implemented! The system securely manages asset trustlines with proper validation and network support.</p>
-          </div>
-        </div>
-
-        {/* Create Trustline Button */}
-        <Button
-          onClick={createTrustline}
-          disabled={!assetCode || !assetIssuer || loading || trustlineExists === true}
-          className="w-full bg-gradient-to-r from-primary to-crypto-teal hover:from-primary/80 hover:to-crypto-teal/80 transition-all duration-300"
-          size="lg"
-        >
-          {loading ? (
-            <>
-              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-              Creating Trustline...
-            </>
+          ) : existingTrustlines.length === 0 ? (
+            <div className="text-center py-8 border border-dashed border-border/40 rounded-lg">
+              <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">No trustlines found</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Create a trustline to start receiving tokens
+              </p>
+            </div>
           ) : (
-            <>
-              <Plus className="w-4 h-4 mr-2" />
-              {trustlineExists === true 
-                ? "Trustline Already Exists" 
-                : `Create Trustline for ${assetCode || 'Asset'}`
-              }
-            </>
+            <div className="space-y-2">
+              {existingTrustlines.map((trustline) => {
+                const token = findToken(trustline.asset_code, trustline.asset_issuer);
+                return (
+                  <div
+                    key={`${trustline.asset_code}-${trustline.asset_issuer}`}
+                    className="flex items-center justify-between p-3 border border-border/20 rounded-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      {token?.logoURI && (
+                        <img
+                          src={token.logoURI}
+                          alt={trustline.asset_code}
+                          className="w-6 h-6 rounded-full"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{trustline.asset_code}</span>
+                          {trustline.is_authorized ? (
+                            <CheckCircle className="w-4 h-4 text-green-400" />
+                          ) : (
+                            <AlertTriangle className="w-4 h-4 text-amber-400" />
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Balance: {parseFloat(trustline.balance).toFixed(4)} / {trustline.limit}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => window.open(
+                          `https://stellar.expert/explorer/${getNetworkType(selectedNetwork || "stellar-testnet")}/account/${trustline.asset_issuer}`,
+                          '_blank'
+                        )}
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeTrustline(trustline.asset_code, trustline.asset_issuer)}
+                        disabled={loading || parseFloat(trustline.balance) > 0}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
-        </Button>
+        </div>
 
         {/* Network Info */}
-        <div className="text-center">
-          <Badge variant="outline" className="text-xs">
-            {selectedNetwork === "stellar-mainnet" ? "Mainnet" : "Testnet"}
-          </Badge>
+        <div className="mt-6 pt-4 border-t border-border/20">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Network</span>
+            <Badge variant="outline">
+              {selectedNetwork === "stellar-mainnet" ? "Mainnet" : "Testnet"}
+            </Badge>
+          </div>
         </div>
-      </div>
+      </CardContent>
     </Card>
   );
 };

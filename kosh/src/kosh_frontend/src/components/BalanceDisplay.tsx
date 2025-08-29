@@ -1,28 +1,34 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Eye, EyeOff, RefreshCw } from "lucide-react";
+import { Eye, EyeOff, RefreshCw, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import TrustlineManager from "./TrustlineManager";
 
 interface BalanceDisplayProps {
   stellarAddress?: any;
+  actor?: any;
   onGetBalance?: (address?: string) => Promise<string>;
   priceData?: any;
   priceLoading?: boolean;
   formatUsdValue?: (price: number, amount: number) => string;
   formatPercentChange?: (change: number) => string;
   selectedNetwork?: string;
+  onTrustlineChange?: () => void;
 }
 
 const BalanceDisplay = ({ 
   stellarAddress, 
+  actor,
   onGetBalance, 
   priceData, 
   priceLoading,
   formatUsdValue,
   formatPercentChange,
-  selectedNetwork 
+  selectedNetwork,
+  onTrustlineChange
 }: BalanceDisplayProps) => {
   const [isVisible, setIsVisible] = useState(true);
   const [balance, setBalance] = useState<string | null>(null);
@@ -180,6 +186,37 @@ const BalanceDisplay = ({
             >
               <RefreshCw className={`w-4 h-4 ${balanceLoading ? 'animate-spin' : 'hover:animate-spin'}`} />
             </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hover:bg-card/50 transition-smooth"
+                  disabled={!stellarAddress?.stellar_address}
+                >
+                  <Settings className="w-4 h-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Manage Trustlines</DialogTitle>
+                  <DialogDescription>
+                    Add or remove trustlines to receive different Stellar tokens
+                  </DialogDescription>
+                </DialogHeader>
+                <TrustlineManager
+                  actor={actor}
+                  stellarAddress={stellarAddress}
+                  selectedNetwork={selectedNetwork}
+                  onTrustlineChange={() => {
+                    handleRefreshBalance();
+                    if (onTrustlineChange) {
+                      onTrustlineChange();
+                    }
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
         
