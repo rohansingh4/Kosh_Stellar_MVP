@@ -235,19 +235,6 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
         description: `Bridging ${bridgeForm.amount} ${bridgeForm.destToken} to ${result.bridgeDetails?.toChain}`,
       });
       
-      // Close modal after delay
-      setTimeout(() => {
-        setBridgeForm({ 
-          fromToken: 'XLM',
-          destToken: 'HOLSKEY',
-          amount: '',
-          destChain: '17000',
-          recipientAddress: ''
-        });
-        setBridgeResult(null);
-        setShowBridgeModal(false);
-      }, 5000);
-      
     } catch (error: any) {
       console.error('Bridge error:', error);
       setBridgeProgress(0);
@@ -687,7 +674,25 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
       </Dialog>
 
       {/* Bridge Modal */}
-      <Dialog open={showBridgeModal} onOpenChange={setShowBridgeModal}>
+      <Dialog 
+        open={showBridgeModal} 
+        onOpenChange={(open) => {
+          if (!open) {
+            // Clear all bridge state when modal is closed
+            setBridgeForm({ 
+              fromToken: 'XLM',
+              destToken: 'HOLSKEY',
+              amount: '',
+              destChain: '17000',
+              recipientAddress: ''
+            });
+            setBridgeResult(null);
+            setBridgeProgress(0);
+            setBridgeLoading(false);
+          }
+          setShowBridgeModal(open);
+        }}
+      >
         <DialogContent className="bg-card/95 backdrop-blur-sm border-border/20 max-w-lg w-[calc(100%-2rem)] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 pb-4">
             <DialogTitle className="flex items-center gap-2">
@@ -940,6 +945,29 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
                     className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-sm"
                   >
                     {bridgeLoading ? 'Bridging...' : 'Bridge Tokens'}
+                  </Button>
+                </div>
+              )}
+              
+              {/* Result View Buttons */}
+              {bridgeResult && (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      // Go back to form - clear result but keep form data
+                      setBridgeResult(null);
+                      setBridgeProgress(0);
+                    }}
+                    className="flex-1 text-sm"
+                  >
+                    ← Go Back
+                  </Button>
+                  <Button
+                    onClick={() => setShowBridgeModal(false)}
+                    className="flex-1 text-sm"
+                  >
+                    Close
                   </Button>
                 </div>
               )}
