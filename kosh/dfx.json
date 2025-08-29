@@ -14,7 +14,18 @@
         "src/kosh_frontend/dist"
       ],
       "type": "assets",
-      "workspace": "kosh_frontend"
+      "workspace": "kosh_frontend",
+      "headers": [
+        {
+          "source": "/**",
+          "headers": [
+            {
+              "name": "Content-Security-Policy",
+              "value": "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' http://localhost:* https://icp0.io https://*.icp0.io https://icp-api.io https://horizon-testnet.stellar.org https://horizon.stellar.org https://*.stellar.org; worker-src 'self' blob:"
+            }
+          ]
+        }
+      ]
     },
     "internet-identity": {
       "type": "pull",
