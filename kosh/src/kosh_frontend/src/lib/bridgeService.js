@@ -8,7 +8,8 @@ import {
   BASE_FEE,
   nativeToScVal,
   Address,
-  Networks
+  Networks,
+  Operation
 } from '@stellar/stellar-sdk';
 
 // Get bridge configuration based on network
@@ -103,7 +104,7 @@ export const getAccountData = async (address, network) => {
 };
 
 // Build actual Stellar transaction using Stellar SDK
-export const buildStellarTransaction = async (params, config, accountData) => {
+export const buildStellarTransaction = async (params, config, accountData, actor) => {
   console.log('🔒 Building Stellar transaction with SDK...');
   console.log('📊 Parameters:', params);
   console.log('📋 Config:', config);
@@ -112,6 +113,7 @@ export const buildStellarTransaction = async (params, config, accountData) => {
   try {
     // Create Account object from account data
     const account = new Account(params.userAddress, accountData.sequence.toString());
+    account.incrementSequenceNumber();
     console.log('👤 Account created:', { accountId: account.accountId(), sequence: account.sequenceNumber() });
     
     // Create Contract object for the bridge contract
@@ -124,34 +126,85 @@ export const buildStellarTransaction = async (params, config, accountData) => {
     console.log('🌐 Network passphrase:', networkPassphrase);
     
     // Convert amount to stroops (1 XLM = 10,000,000 stroops)
-    const amountStroops = Math.floor(params.amount * 10_000_000);
+    const amountStroops = String(Math.floor(params.amount * 10_000_000));
     console.log('💰 Amount in stroops:', amountStroops);
     
+    // For Stellar native XLM, use the native asset address
+    // const nativeAssetAddress = Address.fromString('CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQAHHAGCN4B2');
+    // console.log('🪙 Native asset address:', nativeAssetAddress.toString());
+    
     // Build the transaction using TransactionBuilder
-    const transaction = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: networkPassphrase,
-    })
-    .addOperation(
-      contract.call(
-        'lock',
-        nativeToScVal(params.userAddress, { type: 'address' }),           // User address
-        nativeToScVal('native', { type: 'string' }),                     // From token (XLM native)
-        nativeToScVal(params.destToken, { type: 'string' }),             // Destination token
-        nativeToScVal(amountStroops, { type: 'i128' }),                  // Amount in stroops
-        nativeToScVal(new TextEncoder().encode(params.destChain), { type: 'bytes' }), // Destination chain as bytes
-        nativeToScVal(params.recipientAddress, { type: 'string' })       // Recipient address
-      )
-    )
-    .setTimeout(30)
-    .build();
+    const txBuilder = new TransactionBuilder(account, {
+      fee: String(BASE_FEE),
+      networkPassphrase: Networks.TESTNET,
+    });
+
+    // Add a manageData entry for the contract id (from_token)
+    txBuilder.addOperation(
+      Operation.manageData({
+        name: "contract_id", // metadata key
+        value: config.contractId,
+      })
+    );
+
+    // Add a manageData entry for dest_token
+    txBuilder.addOperation(
+      Operation.manageData({
+        name: "dest_token",
+        value: params.destToken,
+      })
+    );
+
+    // Add a manageData entry for in_amount
+    txBuilder.addOperation(
+      Operation.manageData({
+        name: "in_amount",
+        value: amountStroops,
+      })
+    );
+
+    // Add a manageData entry for dest_chain (store ASCII)
+    txBuilder.addOperation(
+      Operation.manageData({
+        name: "dest_chain",
+        // convert to ASCII
+        value: params.destChain,
+      })
+    );
+
+    // Add a manageData entry for recipient address
+    txBuilder.addOperation(
+      Operation.manageData({
+        name: "recipient_address",
+        value: params.recipientAddress,
+      })
+    );
+
+    // Add an operation that marks intent to call 'lock' (purely descriptive)
+    txBuilder.addOperation(
+      Operation.manageData({
+        name: "intent",
+        value: "call_lock",
+      })
+    );
+
+
+    // Finalize transaction (unsigned)
+    const tx = txBuilder.setTimeout(180).build();
+    console.log("XDR=>",tx.toXDR());
+
+
+    // stellar_user_lock_txn (xdr,testnet)
+    await actor.stellar_user_lock_txn(tx.toXDR(), config.network);  
+    
+    
     
     console.log('✅ Transaction built successfully');
-    console.log('📝 Transaction XDR:', transaction.toXDR());
+    // console.log('📝 Transaction XDR:', tx.toXDR());
     
     return {
       transaction,
-      transactionXDR: transaction.toXDR(),
+      transactionXDR: tx.toXDR(),
       contractCall: {
         contractId: config.contractId,
         method: 'lock',
@@ -237,7 +290,7 @@ export const executeBridgeTransaction = async (params, network, onProgress, acto
     console.log('🔨 Building Soroban contract transaction...');
     
     // Build the actual Stellar transaction using Stellar SDK
-    const { transactionXDR, contractCall, networkConfig } = await buildStellarTransaction(params, config, accountData);
+    const { transactionXDR, contractCall, networkConfig } = await buildStellarTransaction(params, config, accountData, actor);
     
     console.log('✅ Transaction built on frontend:', {
       contractId: contractCall.contractId,

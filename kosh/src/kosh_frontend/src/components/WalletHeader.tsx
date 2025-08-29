@@ -2,10 +2,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Settings, Globe, Menu, Copy, Check } from "lucide-react";
+import { Globe, Menu, Copy, Check, MessageSquare, Star, Info, HelpCircle, Network } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { copyToClipboard } from "@/lib/clipboard";
-// Using the new KOSH logo from public directory
 
 interface WalletHeaderProps {
   principal?: any;
@@ -18,6 +16,31 @@ const WalletHeader = ({ principal, onLogout, selectedNetwork = "stellar-testnet"
   const [showSettings, setShowSettings] = useState(false);
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
+
+  const copyToClipboard = async (text: string): Promise<boolean> => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } else {
+        // Fallback for older browsers or non-secure contexts
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const result = document.execCommand('copy');
+        textArea.remove();
+        return result;
+      }
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+      return false;
+    }
+  };
 
   const handleCopyPrincipal = async () => {
     if (!principal) return;
@@ -55,20 +78,12 @@ const WalletHeader = ({ principal, onLogout, selectedNetwork = "stellar-testnet"
           </Button>
         </div>
         
-        {/* Center: KOSH Brand */}
+        {/* Center: KOSH Logo */}
         <div className="flex items-center justify-center">
           <img 
-            src="/PHOTO-2025-07-20-01-21-31.jpg" 
-            alt="KOSH - The Keyless Holder Wallet" 
-            className="h-10 w-auto animate-float shadow-glow"
-            onError={(e) => {
-              // Fallback to text if image fails to load
-              const target = e.currentTarget as HTMLImageElement;
-              const fallback = document.createElement('div');
-              fallback.className = 'text-primary font-bold text-lg';
-              fallback.textContent = 'KOSH';
-              target.parentNode?.replaceChild(fallback, target);
-            }}
+            src="/logo-rbg.png" 
+            alt="Kosh Stellar Wallet"
+            className="h-10 w-auto object-contain animate-float"
           />
         </div>
         
@@ -114,8 +129,70 @@ const WalletHeader = ({ principal, onLogout, selectedNetwork = "stellar-testnet"
                   </div>
                 </div>
 
-                {/* Logout Section */}
+                {/* Additional Options */}
                 <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-foreground">More</h4>
+                  <div className="space-y-2">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start gap-2 text-sm"
+                      onClick={() => {
+                        // Add about functionality
+                        console.log('About clicked');
+                        setShowSettings(false);
+                      }}
+                    >
+                      <Info className="w-4 h-4" />
+                      About
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start gap-2 text-sm"
+                      onClick={() => {
+                        // Add help functionality
+                        console.log('Help clicked');
+                        setShowSettings(false);
+                      }}
+                    >
+                      <HelpCircle className="w-4 h-4" />
+                      Help
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start gap-2 text-sm"
+                      onClick={() => {
+                        // Add network functionality
+                        console.log('Network settings clicked');
+                        setShowSettings(false);
+                      }}
+                    >
+                      <Network className="w-4 h-4" />
+                      Network Settings
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start gap-2 text-sm"
+                      onClick={() => window.open('https://mykosh.app/', '_blank', 'noopener,noreferrer')}
+                    >
+                      <Star className="w-4 h-4" />
+                      What's New
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start gap-2 text-sm"
+                      onClick={() => {
+                        window.location.href = 'mailto:support@mykosh.app?subject=Feedback%20on%20Kosh%20Stellar%20Wallet';
+                        setShowSettings(false);
+                      }}
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      Leave Feedback
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Logout Section */}
+                <div className="space-y-3 pt-4 border-t border-border/10">
                   <h4 className="text-sm font-semibold text-foreground">Account</h4>
                   <div className="space-y-2">
                     <p className="text-xs text-muted-foreground">
@@ -147,8 +224,7 @@ const WalletHeader = ({ principal, onLogout, selectedNetwork = "stellar-testnet"
           <SelectTrigger className="w-full bg-card/50 backdrop-blur-sm border-border/20 hover:bg-card/70 transition-smooth">
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full animate-pulse-glow ${
-                selectedNetwork === "stellar-mainnet" ? "bg-crypto-blue" : 
-                selectedNetwork === "base-mainnet" ? "bg-blue-500" : "bg-success"
+                selectedNetwork === "stellar-mainnet" ? "bg-crypto-blue" : "bg-success"
               }`}></span>
               <SelectValue />
             </div>
@@ -156,7 +232,6 @@ const WalletHeader = ({ principal, onLogout, selectedNetwork = "stellar-testnet"
           <SelectContent className="bg-card/95 backdrop-blur-sm border-border/20">
             <SelectItem value="stellar-testnet">Stellar Testnet</SelectItem>
             <SelectItem value="stellar-mainnet">Stellar Mainnet</SelectItem>
-            <SelectItem value="base-mainnet">Base Mainnet</SelectItem>
             <SelectItem value="ethereum" disabled>Ethereum (Coming Soon)</SelectItem>
             <SelectItem value="polygon" disabled>Polygon (Coming Soon)</SelectItem>
           </SelectContent>
@@ -165,5 +240,6 @@ const WalletHeader = ({ principal, onLogout, selectedNetwork = "stellar-testnet"
     </div>
   );
 };
+
 
 export default WalletHeader;

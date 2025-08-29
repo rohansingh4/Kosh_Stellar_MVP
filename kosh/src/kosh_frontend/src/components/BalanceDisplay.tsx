@@ -139,10 +139,19 @@ const BalanceDisplay = ({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => window.open('https://stellar.org/learn/fundamentals/stellar-data-structures/accounts#account-creation', '_blank')}
-                        className="text-xs"
+                        onClick={(e) => {
+                          e.currentTarget.classList.add('scale-95');
+                          setTimeout(() => {
+                            window.open('https://stellar.org/learn/fundamentals/stellar-data-structures/accounts#account-creation', '_blank');
+                            e.currentTarget.classList.remove('scale-95');
+                          }, 150);
+                        }}
+                        className="text-xs bg-primary text-[black] transition-all duration-200 hover:scale-105 hover:shadow-md active:scale-95 active:shadow-sm transform-gpu"
                       >
-                        Learn More
+                        <span className="relative inline-block group">
+                          <span className="relative z-10">Learn More</span>
+                          <span className="absolute bottom-0 left-0 w-0 h-[2px] bg-black transition-all duration-300 group-hover:w-full"></span>
+                        </span>
                       </Button>
                     )}
                   </div>
