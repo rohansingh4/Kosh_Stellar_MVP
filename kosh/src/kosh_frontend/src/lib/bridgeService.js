@@ -16,7 +16,7 @@ export const getBridgeConfig = (network) => {
   const isTestnet = network !== 'stellar-mainnet';
   
   return {
-    contractId: 'CDTA5IYGUGRI4PAGXJL7TPBEIC3EZY6V23ILF5EDVXFXLCGGMVOK4CRL',
+    contractId: 'CDTA5IYGUGRI4PAGXJL7TPBEIC3EZY6V23ILF5EDVXFVLCGGMVOK4CRL',
     network: isTestnet ? 'testnet' : 'mainnet',
     rpcUrl: isTestnet ? 'https://soroban-testnet.stellar.org' : 'https://soroban-mainnet.stellar.org',
     networkPassphrase: isTestnet ? 'Test SDF Network ; September 2015' : 'Public Global Stellar Network ; September 2015'
@@ -115,6 +115,7 @@ export const buildStellarTransaction = async (params, config, accountData) => {
     console.log('👤 Account created:', { accountId: account.accountId(), sequence: account.sequenceNumber() });
     
     // Create Contract object for the bridge contract
+    console.log("Config => ",config);
     const contract = new Contract(config.contractId);
     console.log('📋 Contract created:', config.contractId);
     
@@ -138,7 +139,7 @@ export const buildStellarTransaction = async (params, config, accountData) => {
         nativeToScVal('native', { type: 'string' }),                     // From token (XLM native)
         nativeToScVal(params.destToken, { type: 'string' }),             // Destination token
         nativeToScVal(amountStroops, { type: 'i128' }),                  // Amount in stroops
-        nativeToScVal(Buffer.from(params.destChain), { type: 'bytes' }), // Destination chain as bytes
+        nativeToScVal(new TextEncoder().encode(params.destChain), { type: 'bytes' }), // Destination chain as bytes
         nativeToScVal(params.recipientAddress, { type: 'string' })       // Recipient address
       )
     )
@@ -251,6 +252,7 @@ export const executeBridgeTransaction = async (params, network, onProgress, acto
         console.log('📞 Sending transaction to backend for signing...');
         
         // Call a simpler backend function that just signs and submits the XDR
+        
         const signResult = await actor.sign_transaction_stellar(
           params.userAddress,
           transactionXDR,
