@@ -437,7 +437,7 @@ async fn build_stellar_transaction(
 
     // Convert amount to stroops (1 XLM = 10,000,000 stroops)
     // Make sure to keep it as i64 which is what Stellar expects
-    let stroops_amount = (1 * 10_000_000) as i64;
+    let stroops_amount = amount as i64;
 
     // Create the payment operation
     let payment_op = PaymentOp {

@@ -17,6 +17,7 @@ interface BalanceDisplayProps {
   formatPercentChange?: (change: number) => string;
   selectedNetwork?: string;
   onTrustlineChange?: () => void;
+  onBalanceUpdate?: (balance: string) => void; // Add balance update callback
 }
 
 const BalanceDisplay = ({ 
@@ -28,7 +29,8 @@ const BalanceDisplay = ({
   formatUsdValue,
   formatPercentChange,
   selectedNetwork,
-  onTrustlineChange
+  onTrustlineChange,
+  onBalanceUpdate
 }: BalanceDisplayProps) => {
   const [isVisible, setIsVisible] = useState(true);
   const [balance, setBalance] = useState<string | null>(null);
@@ -49,6 +51,11 @@ const BalanceDisplay = ({
     try {
       const result = await onGetBalance(stellarAddress.stellar_address);
       setBalance(result);
+      
+      // Notify parent component of balance update
+      if (onBalanceUpdate) {
+        onBalanceUpdate(result);
+      }
       
       // Check if account needs funding - don't show success toast in this case
       if (result !== "Account needs funding") {
