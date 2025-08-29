@@ -673,7 +673,7 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
               actor={actor}
               stellarAddress={stellarAddress}
               selectedNetwork={selectedNetwork}
-              onTrustlineCreated={() => {
+              onTrustlineChange={() => {
                 setShowTrustlineModal(false);
                 // Refresh token balances if they're open
                 if (onRefreshBalance) {
