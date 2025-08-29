@@ -31,9 +31,10 @@ interface ActionButtonsProps {
   onRefreshBalance?: (address?: string) => Promise<string>;
   actor?: any;
   selectedNetwork?: string;
+  currentBalance?: string; // Add current balance for Max button
 }
 
-const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, actor, selectedNetwork }: ActionButtonsProps) => {
+const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, actor, selectedNetwork, currentBalance }: ActionButtonsProps) => {
   const [showSendModal, setShowSendModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [showSwapModal, setShowSwapModal] = useState(false);
@@ -121,6 +122,18 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
       setQrCodeDataUrl(dataUrl);
     } catch (error) {
       console.error('Failed to generate QR code:', error);
+    }
+  };
+
+  const handleMaxAmount = () => {
+    if (currentBalance) {
+      // Extract numeric balance and set as amount
+      const balanceNum = parseFloat(currentBalance.replace(' XLM', ''));
+      if (!isNaN(balanceNum)) {
+        // Reserve 0.5 XLM for fees (minimum reserve)
+        const maxAmount = Math.max(0, balanceNum - 0.5);
+        setSendForm({ ...sendForm, amount: maxAmount.toFixed(7) });
+      }
     }
   };
 
@@ -406,17 +419,33 @@ const ActionButtons = ({ stellarAddress, onSendTransaction, onRefreshBalance, ac
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="amount">Amount (XLM)</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    value={sendForm.amount}
-                    onChange={(e) => setSendForm({...sendForm, amount: e.target.value})}
-                    placeholder="0.00"
-                    step="0.0000001"
-                    min="0"
-                    className="bg-card/50 border-border/20"
-                    disabled={transactionLoading}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="amount"
+                      type="number"
+                      value={sendForm.amount}
+                      onChange={(e) => setSendForm({...sendForm, amount: e.target.value})}
+                      placeholder="0.00"
+                      step="0.0000001"
+                      min="0"
+                      className="flex-1 bg-card/50 border-border/20"
+                      disabled={transactionLoading}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleMaxAmount}
+                      disabled={transactionLoading || !currentBalance}
+                      className="px-3 text-xs whitespace-nowrap"
+                    >
+                      Max
+                    </Button>
+                  </div>
+                  {currentBalance && (
+                    <p className="text-xs text-muted-foreground">
+                      Available: {currentBalance}
+                    </p>
+                  )}
                 </div>
               </>
             ) : null}

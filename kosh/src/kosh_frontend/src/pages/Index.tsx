@@ -1,3 +1,4 @@
+import { useState } from "react";
 import WalletHeader from "@/components/WalletHeader";
 import AddressDisplay from "@/components/AddressDisplay";
 import BalanceDisplay from "@/components/BalanceDisplay";
@@ -16,6 +17,7 @@ interface AuthData {
   getAccountBalance: (address?: string) => Promise<string>;
   selectedNetwork: string;
   onNetworkChange: (network: string) => void;
+  currentBalance?: string; // Add current balance
 }
 
 interface PriceData {
@@ -32,6 +34,13 @@ interface IndexProps {
 }
 
 const Index = ({ authData, priceData }: IndexProps) => {
+  const [currentBalance, setCurrentBalance] = useState<string | null>(null);
+
+  // Function to update balance from BalanceDisplay
+  const handleBalanceUpdate = (balance: string) => {
+    setCurrentBalance(balance);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-main relative overflow-hidden">
       {/* Background decorative elements */}
@@ -62,6 +71,7 @@ const Index = ({ authData, priceData }: IndexProps) => {
             formatUsdValue={priceData.formatUsdValue}
             formatPercentChange={priceData.formatPercentChange}
             selectedNetwork={authData.selectedNetwork}
+            onBalanceUpdate={handleBalanceUpdate}
           />
           <AIStakingCard />
           <ActionButtons 
@@ -70,6 +80,7 @@ const Index = ({ authData, priceData }: IndexProps) => {
             onRefreshBalance={authData.getAccountBalance}
             actor={authData.actor}
             selectedNetwork={authData.selectedNetwork}
+            currentBalance={currentBalance || undefined}
           />
         </div>
         

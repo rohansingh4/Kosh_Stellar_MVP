@@ -372,10 +372,11 @@ export const useAuth = () => {
     if (!actor) throw new Error('Not authenticated');
     
     try {
-      // Convert amount to u64 format (whole XLM units)
-      const amountU64 = BigInt(Math.floor(parseFloat(amount)));
+      // Convert amount to stroops (1 XLM = 10,000,000 stroops)
+      const amountInXLM = parseFloat(amount);
+      const amountU64 = BigInt(Math.floor(amountInXLM * 10_000_000));
       
-      console.log('Sending transaction with params:', { destinationAddress, amount, amountU64, network });
+      console.log('Sending transaction with params:', { destinationAddress, amount, amountInXLM, amountU64, network });
       const result = await actor.build_stellar_transaction(destinationAddress, amountU64, [network]);
       console.log('Backend response:', result);
       

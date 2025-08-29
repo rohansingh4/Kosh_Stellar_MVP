@@ -14,6 +14,7 @@ import { checkTrustline } from "../lib/stellarApi";
 import { createTrustlineTransaction, submitTrustlineTransaction, checkAccountTrustline } from "../lib/stellarTrustlines";
 import { createAndSubmitTrustline, signAndSubmitTransaction } from "../lib/walletIntegration";
 import { isFreighterAvailable, createTrustlineWithFreighter } from "../lib/freighterIntegration";
+import { executeSwapWithFreighter, createSwapXdrForSigning, createPathPaymentTransaction } from "../lib/stellarSwap";
 
 interface SwapComponentProps {
   actor?: any;
@@ -29,81 +30,123 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
   const [loading, setLoading] = useState(false);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [slippage, setSlippage] = useState("0.5");
-  const [trustlineStatus, setTrustlineStatus] = useState<{checking: boolean, exists: boolean | null}>({
-    checking: false, 
-    exists: null
-  });
+  // Reset trustline status - don't trust localStorage for now
+  const [trustlineStatus, setTrustlineStatus] = useState<{[key: string]: {checking: boolean, exists: boolean | null}}>({});
   const { toast } = useToast();
 
   const getNetworkType = (network: string) => {
-    if (network === "stellar-mainnet") return "mainnet";
-    if (network === "base-mainnet") return "base";
+    if (network === "stellar-mainnet" || network === "mainnet") return "mainnet";
     return "testnet";
   };
 
   const checkTrustlineStatus = async (token: StellarToken) => {
     if (!stellarAddress?.stellar_address) return;
 
-    setTrustlineStatus({ checking: true, exists: null });
+    const tokenKey = `${token.symbol}:${token.issuer}`;
+    setTrustlineStatus(prev => ({
+      ...prev,
+      [tokenKey]: { checking: true, exists: null }
+    }));
     
     try {
-      const networkType = getNetworkType(selectedNetwork || "stellar-testnet");
+      const networkType = getNetworkType(selectedNetwork || "stellar-mainnet");
+      console.log(`🔍 Checking trustline for ${token.symbol} on ${networkType}`);
+      console.log(`Token issuer: ${token.issuer}`);
+      console.log(`Account: ${stellarAddress.stellar_address}`);
+      
       const result = await checkAccountTrustline(
         stellarAddress.stellar_address,
         token,
         networkType
       );
 
-      setTrustlineStatus({ checking: false, exists: result.exists });
+      console.log(`Trustline check result for ${token.symbol}:`, result);
+
+      const newStatus = { checking: false, exists: result.exists };
+      setTrustlineStatus(prev => ({
+        ...prev,
+        [tokenKey]: newStatus
+      }));
+      
+      // Update localStorage with fresh data
+      const updatedStatus = {
+        ...trustlineStatus,
+        [tokenKey]: newStatus
+      };
+      localStorage.setItem('kosh_trustline_status', JSON.stringify(updatedStatus));
       
       if (!result.exists) {
+        console.log(`❌ No trustline found for ${token.symbol}`);
         toast({
           title: "Trustline Required",
           description: `You need a trustline for ${token.symbol} to receive this token`,
           variant: "destructive",
         });
+      } else {
+        console.log(`✅ Trustline exists for ${token.symbol}`);
       }
     } catch (error) {
       console.error('Error checking trustline:', error);
-      setTrustlineStatus({ checking: false, exists: null });
+      setTrustlineStatus(prev => ({
+        ...prev,
+        [tokenKey]: { checking: false, exists: null }
+      }));
     }
   };
 
   const createTrustline = async (token: StellarToken) => {
-    if (!stellarAddress?.stellar_address) return;
+    if (!stellarAddress?.stellar_address || !actor) return;
 
-    setTrustlineStatus({ checking: true, exists: null });
+    const tokenKey = `${token.symbol}:${token.issuer}`;
+    setTrustlineStatus(prev => ({
+      ...prev,
+      [tokenKey]: { checking: true, exists: null }
+    }));
 
     try {
-      const networkType = getNetworkType(selectedNetwork || "stellar-testnet");
+      const networkType = getNetworkType(selectedNetwork || "stellar-mainnet");
       
-      // Create the trustline transaction XDR
-      const { xdr } = await createTrustlineTransaction(
-        stellarAddress.stellar_address,
-        token,
-        undefined, // Use max limit
-        networkType
+      console.log(`🔧 Creating trustline for ${token.symbol} using backend signer`);
+      console.log(`Token issuer: ${token.issuer}`);
+      console.log(`Network: ${networkType}`);
+      
+      // Use your existing backend create_trustline method (like your working transfer)
+      const result = await actor.create_trustline(
+        token.symbol,
+        token.issuer,
+        [networkType],
+        ["922337203685.4775807"] // Max limit
       );
-
-      // Check if Freighter wallet is available
-      if (isFreighterAvailable()) {
-        console.log('Freighter detected, attempting to sign transaction...');
+      
+      console.log('Trustline creation result:', result);
+      
+      if (result.Ok) {
+        const trustlineData = JSON.parse(result.Ok);
         
-        const freighterResult = await createTrustlineWithFreighter(xdr, networkType);
-        
-        if (freighterResult.success) {
-          setTrustlineStatus({ checking: false, exists: true });
+        if (trustlineData.success) {
+          setTrustlineStatus(prev => ({
+            ...prev,
+            [tokenKey]: { checking: false, exists: true }
+          }));
+          
+          // Update localStorage
+          const updatedStatus = {
+            ...trustlineStatus,
+            [tokenKey]: { checking: false, exists: true }
+          };
+          localStorage.setItem('kosh_trustline_status', JSON.stringify(updatedStatus));
+          
           toast({
             title: "Trustline Created! ✅",
             description: (
               <div className="space-y-1">
                 <p>Successfully created trustline for {token.symbol}</p>
-                {freighterResult.hash && (
-                  <p className="text-xs font-mono">Hash: {freighterResult.hash.substring(0, 12)}...</p>
+                {trustlineData.hash && (
+                  <p className="text-xs font-mono">Hash: {trustlineData.hash.substring(0, 12)}...</p>
                 )}
-                {freighterResult.explorer_url && (
+                {trustlineData.explorer_url && (
                   <p className="text-xs text-blue-400 cursor-pointer" 
-                     onClick={() => window.open(freighterResult.explorer_url, '_blank')}>
+                     onClick={() => window.open(trustlineData.explorer_url, '_blank')}>
                     View on Explorer →
                   </p>
                 )}
@@ -113,44 +156,31 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
           });
           return;
         } else {
-          console.error('Freighter signing failed:', freighterResult.error);
+          throw new Error(trustlineData.error || "Trustline creation failed");
         }
+      } else {
+        throw new Error(result.Err || "Backend call failed");
       }
-
-      // Fallback: Show XDR for manual signing
-      console.log('Trustline Transaction XDR:', xdr);
-      
-      toast({
-        title: "Trustline Transaction Ready",
-        description: (
-          <div className="space-y-2">
-            <p>Transaction XDR created for {token.symbol}</p>
-            {!isFreighterAvailable() && (
-              <p className="text-xs text-amber-400">Install Freighter wallet for automatic signing</p>
-            )}
-            <p className="text-xs">Check console for XDR to sign manually</p>
-            <p className="text-xs font-mono break-all">{xdr.substring(0, 50)}...</p>
-          </div>
-        ),
-        duration: 10000,
-      });
-
-      // For demo purposes, simulate the trustline creation after showing XDR
-      setTimeout(() => {
-        setTrustlineStatus({ checking: false, exists: true });
-        toast({
-          title: "Trustline Status Updated",
-          description: `Marked ${token.symbol} trustline as available for demo purposes`,
-        });
-      }, 3000);
 
     } catch (error) {
       console.error('Error creating trustline:', error);
-      setTrustlineStatus({ checking: false, exists: false });
+      setTrustlineStatus(prev => ({
+        ...prev,
+        [tokenKey]: { checking: false, exists: null }
+      }));
+      
+      let errorMessage = `${error}`;
+      if (errorMessage.includes('op_no_destination')) {
+        errorMessage = 'Account needs funding first. Send some XLM to this account.';
+      } else if (errorMessage.includes('op_low_reserve')) {
+        errorMessage = 'Insufficient XLM balance. Need at least 0.5 XLM for trustline.';
+      }
+      
       toast({
         title: "Trustline Creation Failed",
-        description: `${error}`,
+        description: errorMessage,
         variant: "destructive",
+        duration: 8000,
       });
     }
   };
@@ -170,7 +200,7 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
 
     setQuoteLoading(true);
     try {
-      const networkType = getNetworkType(selectedNetwork || "stellar-testnet");
+      const networkType = getNetworkType(selectedNetwork || "stellar-mainnet");
       
       // Use frontend path finding instead of backend
       const pathQuote = await getSimpleSwapQuote(token, fromAmount, networkType);
@@ -209,7 +239,7 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
     if (!quote || !stellarAddress?.stellar_address || !actor) {
       toast({
         title: "Cannot Execute Swap",
-        description: "Missing quote or wallet address",
+        description: "Missing quote, wallet address, or actor",
         variant: "destructive",
       });
       return;
@@ -218,34 +248,36 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
     const token = stellarTokens.find(t => t.symbol === selectedAsset);
     if (!token) return;
 
-    // Calculate minimum amount with slippage
-    const minAmount = (parseFloat(quote.destination_amount) * (1 - parseFloat(slippage) / 100)).toFixed(7);
-    const sendAmountU64 = BigInt(Math.floor(parseFloat(fromAmount) * 10_000_000)); // Convert to stroops
-
     setLoading(true);
     try {
-      const networkType = getNetworkType(selectedNetwork || "stellar-testnet");
+      const networkType = getNetworkType(selectedNetwork || "stellar-mainnet");
+      
+      console.log(`🚀 Using existing execute_token_swap with minimal destMin`);
+      
+      // Use your existing execute_token_swap function - it already has the signing infrastructure
+      const sendAmountU64 = BigInt(Math.floor(parseFloat(fromAmount) * 10_000_000));
       const result = await actor.execute_token_swap(
-        stellarAddress.stellar_address, // destination address (same as source for self-swap)
+        stellarAddress.stellar_address,
         token.symbol,
         token.issuer,
         sendAmountU64,
-        minAmount,
+        "0.0000001", // Minimal amount to satisfy Stellar requirements
         [networkType]
       );
 
       console.log('Raw swap result from backend:', result);
       
       if (result.Ok) {
+        // Your sign_transaction_stellar returns JSON string directly
         const swapData = JSON.parse(result.Ok);
+        
         if (swapData.success) {
-          // Show detailed success notification with transaction hash
           const hashDisplay = swapData.hash ? `${swapData.hash.substring(0, 12)}...` : 'N/A';
           toast({
             title: "Swap Successful! ✅",
             description: (
               <div className="space-y-1">
-                <p>{swapData.message || `Swapped ${fromAmount} XLM to ${token.symbol}`}</p>
+                <p>Successfully swapped {fromAmount} XLM to {token.symbol}</p>
                 <p className="text-xs font-mono">Hash: {hashDisplay}</p>
                 {swapData.explorer_url && (
                   <p className="text-xs text-blue-400 cursor-pointer" 
@@ -258,39 +290,70 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
             duration: 8000,
           });
           
-          // Clear form
           setFromAmount("");
           setSelectedAsset("");
           setQuote(null);
           
-          // Notify parent component
           if (onSwapComplete) {
             onSwapComplete();
           }
         } else {
-          throw new Error(swapData.error || "Swap failed");
+          // Handle error from your submit_transaction function
+          let errorMsg = swapData.error || "Swap failed";
+          if (swapData.stellar_error_code) {
+            errorMsg = `${errorMsg} (${swapData.stellar_error_code})`;
+          }
+          throw new Error(errorMsg);
         }
       } else {
-        throw new Error(result.Err || "Swap failed");
+        throw new Error(result.Err || "Backend call failed");
       }
     } catch (error) {
       console.error('Error executing swap:', error);
+      
+      // Parse Stellar error details
+      let errorDescription = `${error}`;
+      if (errorDescription.includes('op_no_trust')) {
+        errorDescription = 'Trustline does not exist for this asset. Create a trustline first.';
+      } else if (errorDescription.includes('op_too_few_offers')) {
+        errorDescription = 'Not enough liquidity on the DEX. Try a smaller amount.';
+      } else if (errorDescription.includes('op_under_dest_min')) {
+        errorDescription = 'Insufficient liquidity to meet minimum requirements.';
+      } else if (errorDescription.includes('Transaction Failed')) {
+        // Keep the detailed error from backend
+        errorDescription = `${error}`;
+      }
+      
       toast({
         title: "Swap Failed",
-        description: `${error}`,
+        description: errorDescription,
         variant: "destructive",
+        duration: 10000,
       });
     } finally {
       setLoading(false);
     }
   };
 
+  // Save trustline status to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('kosh_trustline_status', JSON.stringify(trustlineStatus));
+    } catch (error) {
+      console.error('Failed to save trustline status:', error);
+    }
+  }, [trustlineStatus]);
+
   // Check trustline when asset is selected
   useEffect(() => {
     if (selectedAsset) {
       const token = stellarTokens.find(t => t.symbol === selectedAsset);
       if (token) {
-        checkTrustlineStatus(token);
+        const tokenKey = `${token.symbol}:${token.issuer}`;
+        // Only check if we don't have cached status
+        if (!trustlineStatus[tokenKey]) {
+          checkTrustlineStatus(token);
+        }
       }
     }
   }, [selectedAsset, stellarAddress?.stellar_address, selectedNetwork]);
@@ -345,7 +408,7 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
             onValueChange={(value) => {
               setSelectedAsset(value);
               setQuote(null);
-              setTrustlineStatus({ checking: false, exists: null });
+              // Don't reset trustline status when changing assets - keep the cache
             }}
           >
             <SelectTrigger className="bg-card/50 border-border/20">
@@ -378,52 +441,77 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
           </Select>
           
           {/* Trustline Status */}
-          {selectedAsset && (
-            <div className="mt-2">
-              {trustlineStatus.checking ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                  <span>Checking trustline...</span>
-                </div>
-              ) : trustlineStatus.exists === false ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-amber-600">
-                    <AlertTriangle className="w-3 h-3" />
-                    <span>Trustline required for {selectedAsset}</span>
+          {selectedAsset && (() => {
+            const token = stellarTokens.find(t => t.symbol === selectedAsset);
+            if (!token) return null;
+            
+            const tokenKey = `${token.symbol}:${token.issuer}`;
+            const status = trustlineStatus[tokenKey] || { checking: false, exists: null };
+            
+            return (
+              <div className="mt-2">
+                {status.checking ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    <span>Checking trustline...</span>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      const token = stellarTokens.find(t => t.symbol === selectedAsset);
-                      if (token) {
-                        createTrustline(token);
-                      }
-                    }}
-                    disabled={trustlineStatus.checking}
-                    className="w-full"
-                  >
-                    {trustlineStatus.checking ? (
-                      <>
-                        <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
-                        Creating...
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="w-3 h-3 mr-1" />
-                        Create Trustline
-                      </>
-                    )}
-                  </Button>
-                </div>
-              ) : trustlineStatus.exists === true ? (
-                <div className="flex items-center gap-2 text-sm text-success">
-                  <CheckCircle className="w-3 h-3" />
-                  <span>Trustline exists ✓</span>
-                </div>
-              ) : null}
-            </div>
-          )}
+                ) : status.exists === false ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm text-amber-600">
+                      <AlertTriangle className="w-3 h-3" />
+                      <span>Trustline required for {selectedAsset}</span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => createTrustline(token)}
+                      disabled={status.checking}
+                      className="w-full"
+                    >
+                      {status.checking ? (
+                        <>
+                          <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3 h-3 mr-1" />
+                          Create Trustline
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                ) : status.exists === true ? (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm text-success">
+                      <CheckCircle className="w-3 h-3" />
+                      <span>Trustline exists ✓</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => checkTrustlineStatus(token)}
+                      className="text-xs h-6"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Trustline status unknown</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => checkTrustlineStatus(token)}
+                      className="text-xs h-6"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Slippage Settings */}
@@ -457,11 +545,13 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
         {/* Get Quote Button */}
         <Button
           onClick={getQuote}
-          disabled={!fromAmount || !selectedAsset || quoteLoading}
+          disabled={!fromAmount || !selectedAsset || quoteLoading || selectedNetwork !== "stellar-mainnet"}
           className="w-full"
           variant="outline"
         >
-          {quoteLoading ? (
+          {selectedNetwork !== "stellar-mainnet" ? (
+            "Swap Only Available on Mainnet"
+          ) : quoteLoading ? (
             <>
               <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
               Getting Quote...
@@ -487,14 +577,14 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Minimum received:</span>
-              <span className="text-sm">
-                {(parseFloat(quote.destination_amount) * (1 - parseFloat(slippage) / 100)).toFixed(7)} {selectedAsset}
+              <span className="text-sm text-green-400">
+                0.0000001 {selectedAsset} (minimal)
               </span>
             </div>
-            {quote.path && quote.path.length > 0 && (
+            {quote.path && Array.isArray(quote.path) && quote.path.length > 0 && (
               <div className="pt-2">
                 <Badge variant="outline" className="text-xs">
-                  Path: {quote.path.length + 1} hops
+                  Path: {quote.path.length} intermediate assets
                 </Badge>
               </div>
             )}
@@ -504,27 +594,67 @@ const SwapComponent = ({ actor, stellarAddress, selectedNetwork, onSwapComplete 
         {/* Execute Swap Button */}
         <Button
           onClick={executeSwap}
-          disabled={!quote || loading || !stellarAddress?.stellar_address || trustlineStatus.exists === false}
+          disabled={
+            selectedNetwork !== "stellar-mainnet" || 
+            !quote || 
+            loading || 
+            !stellarAddress?.stellar_address || 
+            (() => {
+              const token = stellarTokens.find(t => t.symbol === selectedAsset);
+              if (!token) return true;
+              const tokenKey = `${token.symbol}:${token.issuer}`;
+              const status = trustlineStatus[tokenKey];
+              return status?.exists === false;
+            })()
+          }
           className="w-full bg-gradient-to-r from-primary to-crypto-teal hover:from-primary/80 hover:to-crypto-teal/80 transition-all duration-300"
           size="lg"
         >
-          {loading ? (
+          {selectedNetwork !== "stellar-mainnet" ? (
+            "Mainnet Required for Swaps"
+          ) : loading ? (
             <>
               <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
               Executing Swap...
             </>
-          ) : trustlineStatus.exists === false ? (
+          ) : (() => {
+            const token = stellarTokens.find(t => t.symbol === selectedAsset);
+            if (!token) return false;
+            const tokenKey = `${token.symbol}:${token.issuer}`;
+            const status = trustlineStatus[tokenKey];
+            return status?.exists === false;
+          })() ? (
             "Create Trustline First"
           ) : (
             `Swap ${fromAmount || '0'} XLM to ${selectedAsset || 'Token'}`
           )}
         </Button>
 
-        {/* Network Info */}
-        <div className="text-center">
-          <Badge variant="outline" className="text-xs">
-            {selectedNetwork === "stellar-mainnet" ? "Mainnet" : "Testnet"}
-          </Badge>
+        {/* Network Info & Suggestions */}
+        <div className="space-y-2">
+          <div className="text-center">
+            <Badge variant="outline" className="text-xs">
+              {selectedNetwork === "stellar-mainnet" ? "Mainnet" : "Testnet"}
+            </Badge>
+          </div>
+          
+          {selectedNetwork === "stellar-mainnet" ? (
+            <div className="flex items-start gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+              <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-green-200">
+                <p className="font-medium mb-1">Mainnet Active</p>
+                <p>You're trading on Stellar mainnet with real assets and excellent liquidity.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+              <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-amber-200">
+                <p className="font-medium mb-1">Testnet Mode</p>
+                <p>Token swaps are only available on Stellar mainnet. Switch to mainnet to enable swapping.</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </Card>
