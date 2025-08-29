@@ -1,6 +1,7 @@
 // Bridge service for cross-chain token locking and bridging
 // Based on Stellar Soroban smart contracts
 
+import * as StellarSdk from '@stellar/stellar-sdk';
 import {
   TransactionBuilder,
   Account,
@@ -8,18 +9,20 @@ import {
   BASE_FEE,
   nativeToScVal,
   Address,
-  Networks
+  Networks,
+  Operation,
+  TimeoutInfinite,
+  xdr
 } from '@stellar/stellar-sdk';
 
-// Get bridge configuration based on network
+// Get bridge configuration based on network (FORCE TESTNET)
 export const getBridgeConfig = (network) => {
-  const isTestnet = network !== 'stellar-mainnet';
-  
+  // Always use testnet for now
   return {
     contractId: 'CDTA5IYGUGRI4PAGXJL7TPBEIC3EZY6V23ILF5EDVXFVLCGGMVOK4CRL',
-    network: isTestnet ? 'testnet' : 'mainnet',
-    rpcUrl: isTestnet ? 'https://soroban-testnet.stellar.org' : 'https://soroban-mainnet.stellar.org',
-    networkPassphrase: isTestnet ? 'Test SDF Network ; September 2015' : 'Public Global Stellar Network ; September 2015'
+    network: 'testnet',
+    rpcUrl: 'https://soroban-testnet.stellar.org',
+    networkPassphrase: 'Test SDF Network ; September 2015'
   };
 };
 
@@ -68,11 +71,9 @@ export const validateBridgeParams = (params) => {
   return null;
 };
 
-// Get account data from Stellar Horizon API
+// Get account data from Stellar Horizon API (FORCE TESTNET)
 export const getAccountData = async (address, network) => {
-  const horizonUrl = network === 'mainnet' 
-    ? 'https://horizon.stellar.org'
-    : 'https://horizon-testnet.stellar.org';
+  const horizonUrl = 'https://horizon-testnet.stellar.org'; // Always use testnet
   
   console.log(`🔍 Fetching account data for ${address} from ${horizonUrl}`);
   
@@ -102,79 +103,290 @@ export const getAccountData = async (address, network) => {
   }
 };
 
-// Build actual Stellar transaction using Stellar SDK
-export const buildStellarTransaction = async (params, config, accountData) => {
-  console.log('🔒 Building Stellar transaction with SDK...');
-  console.log('📊 Parameters:', params);
-  console.log('📋 Config:', config);
-  console.log('💰 Account data:', accountData);
+const BRIDGE_CONTRACT = 'CDTA5IYGUGRI4PAGXJL7TPBEIC3EZY6V23ILF5EDVXFVLCGGMVOK4CRL';
+const CANISTER_ADDRESS = 'GAUZMIWKXYCQIAFBL7YDL75C3VKB3BO2Z73NJTJLOSBXUAAI2LIOFAID';
+
+// Helper function to get account data from Stellar network using Horizon API (FORCE TESTNET)
+const getSorobanAccountData = async (address, network) => {
+  const horizonUrl = 'https://horizon-testnet.stellar.org'; // Always use testnet
   
   try {
-    // Create Account object from account data
-    const account = new Account(params.userAddress, accountData.sequence.toString());
-    console.log('👤 Account created:', { accountId: account.accountId(), sequence: account.sequenceNumber() });
+    const response = await fetch(`${horizonUrl}/accounts/${address}`);
     
-    // Create Contract object for the bridge contract
-    console.log("Config => ",config);
-    const contract = new Contract(config.contractId);
-    console.log('📋 Contract created:', config.contractId);
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Account not found. Please fund your account first.');
+      }
+      throw new Error(`Failed to fetch account data: ${response.status}`);
+    }
     
-    // Get network passphrase
-    const networkPassphrase = config.network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
-    console.log('🌐 Network passphrase:', networkPassphrase);
+    const accountData = await response.json();
     
-    // Convert amount to stroops (1 XLM = 10,000,000 stroops)
-    const amountStroops = Math.floor(params.amount * 10_000_000);
+    return {
+      sequence: accountData.sequence,
+      subentryCount: accountData.subentry_count || 0,
+      thresholds: accountData.thresholds || {},
+      balances: accountData.balances || []
+    };
+  } catch (error) {
+    console.error('❌ Failed to fetch account data:', error);
+    throw new Error(`Could not fetch account data for ${address}: ${error.message}`);
+  }
+};
+
+// Helper function to get chain name (internal version with extended chains)
+const getInternalChainName = (chainId) => {
+  const chainMap = {
+    '1': 'Ethereum',
+    '56': 'BSC',
+    '137': 'Polygon',
+    '43114': 'Avalanche',
+    '17000': 'Holesky Testnet'
+  };
+  return chainMap[chainId] || `Chain ${chainId}`;
+};
+
+// Build actual Stellar transaction using Stellar SDK
+export const buildStellarTransaction = async (params, config, actor, onProgress) => {
+  console.log('🌉 Starting complete Stellar Bridge Transaction');
+  console.log('📋 Contract:', BRIDGE_CONTRACT);
+  console.log('🔑 Canister:', CANISTER_ADDRESS);
+  console.log('📊 Parameters:', params);
+  console.log('⚙️ Config:', config);
+
+  try {
+    // Step 1: Validate parameters
+    onProgress?.(10);
+    const {
+      userAddress,        // User's Stellar address
+      recipientAddress,   // Ethereum recipient address
+      amount = 1.0,       // XLM amount (default 1.0)
+      destToken = 'HOLSKEY',
+      destChain = '17000'
+    } = params;
+
+    // Validate required parameters
+    if (!userAddress || typeof userAddress !== 'string') {
+      throw new Error('userAddress is required (Stellar address of the user)');
+    }
+    if (!recipientAddress || typeof recipientAddress !== 'string') {
+      throw new Error('recipientAddress is required (Ethereum address)');
+    }
+
+    console.log('✅ Parameters validated');
+    console.log('👤 User Address:', userAddress);
+    console.log('🎯 Recipient:', recipientAddress);
+    console.log('💰 Amount:', amount, 'XLM');
+
+    // Step 2: Get account data from Stellar network (USE USER ADDRESS!)
+    onProgress?.(25);
+    console.log('🔍 Fetching USER account data from Stellar...');
+    
+    const accountData = await getSorobanAccountData(userAddress, 'testnet');
+    console.log('📊 Account data retrieved:', {
+      address: userAddress,
+      sequence: accountData.sequence
+    });
+
+    // Step 3: Build the transaction
+    onProgress?.(40);
+    console.log('🔨 Building Soroban contract transaction...');
+
+    // Create account object for the USER (source account)
+    const userAccount = new Account(userAddress, accountData.sequence.toString());
+    console.log('🏦 User Account created with sequence:', userAccount.sequenceNumber());
+
+    // Network setup (FORCE TESTNET)
+    const networkType = 'testnet'; // Always use testnet
+    const networkPassphrase = Networks.TESTNET;
+    console.log('🌐 Using network:', networkType);
+
+    // Convert amount to stroops
+    const amountStroops = Math.floor(amount * 10_000_000);
     console.log('💰 Amount in stroops:', amountStroops);
+
+    // Prepare contract arguments
+    const contractArgs = [
+      nativeToScVal(Address.fromString(userAddress), { type: 'address' }),
+      nativeToScVal('native', { type: 'string' }),
+      nativeToScVal(destToken, { type: 'string' }),
+      nativeToScVal(amountStroops, { type: 'i128' }),
+      nativeToScVal(destChain, { type: 'string' }),
+      nativeToScVal(recipientAddress, { type: 'string' })
+    ];
+
+    console.log('📋 Contract arguments prepared:', contractArgs.length, 'args');
+
+    // Build the contract for Soroban invocation
+    const contract = new Contract(BRIDGE_CONTRACT);
     
-    // Build the transaction using TransactionBuilder
-    const transaction = new TransactionBuilder(account, {
-      fee: BASE_FEE,
+    // Build the transaction using contract.call method
+    const transaction = new TransactionBuilder(userAccount, {
+      fee: (100 * 100000).toString(), // 0.01 XLM fee for Soroban
       networkPassphrase: networkPassphrase,
     })
     .addOperation(
-      contract.call(
-        'lock',
-        nativeToScVal(params.userAddress, { type: 'address' }),           // User address
-        nativeToScVal('native', { type: 'string' }),                     // From token (XLM native)
-        nativeToScVal(params.destToken, { type: 'string' }),             // Destination token
-        nativeToScVal(amountStroops, { type: 'i128' }),                  // Amount in stroops
-        nativeToScVal(new TextEncoder().encode(params.destChain), { type: 'bytes' }), // Destination chain as bytes
-        nativeToScVal(params.recipientAddress, { type: 'string' })       // Recipient address
-      )
+      contract.call('lock', ...contractArgs)
     )
-    .setTimeout(30)
+    .setTimeout(TimeoutInfinite) // Infinite timeout for Soroban
     .build();
-    
+
     console.log('✅ Transaction built successfully');
-    console.log('📝 Transaction XDR:', transaction.toXDR());
+
+    // Generate XDR
+    const transactionXDR = transaction.toXDR('base64');
+    console.log('📝 XDR generated, length:', transactionXDR.length);
+
+    // Validate XDR
+    try {
+      const validationTx = TransactionBuilder.fromXDR(transactionXDR, networkPassphrase);
+      console.log('✅ XDR validation successful');
+    } catch (validationError) {
+      console.error('❌ XDR validation failed:', validationError);
+      throw new Error(`Generated XDR is invalid: ${validationError.message}`);
+    }
+
+    // Step 4: For now, just console.log the XDR instead of backend calls
+    console.log('🎯 SOROBAN CONTRACT TRANSACTION XDR:');
+    console.log('📝 XDR Base64:', transactionXDR);
+    console.log('🏷️ Contract:', BRIDGE_CONTRACT);
+    console.log('⚙️ Function: lock');
+    console.log('📊 Args Count:', contractArgs.length);
+    console.log('🌐 Network:', networkType);
+    console.log('👤 Source Address (USER):', userAddress);
+    console.log('🎯 Recipient:', params.recipientAddress);
+    console.log('💰 Amount:', params.amount, 'XLM');
+    console.log('🔑 IMPORTANT: Transaction will be signed by USER address, not canister!');
+    
+    onProgress?.(100);
     
     return {
-      transaction,
-      transactionXDR: transaction.toXDR(),
-      contractCall: {
-        contractId: config.contractId,
-        method: 'lock',
-        parameters: {
-          user: params.userAddress,
-          fromToken: 'native', // XLM native
-          destToken: params.destToken,
-          amount: amountStroops,
-          destChain: params.destChain,
-          recipientAddress: params.recipientAddress
-        }
-      },
-      networkConfig: {
-        network: config.network,
-        networkPassphrase: networkPassphrase,
-        rpcUrl: config.rpcUrl
+      success: true,
+      message: "Soroban contract XDR generated successfully",
+      transactionXDR: transactionXDR,
+      contractDetails: {
+        contractId: BRIDGE_CONTRACT,
+        sourceAddress: userAddress, // USER is the source now!
+        userAddress: userAddress,
+        function: 'lock',
+        args: contractArgs,
+        network: networkType
       }
     };
+    
+    if (false && actor) { // Disabled backend calls for now
+      try {
+        onProgress?.(60);
+        console.log('📞 Sending transaction to backend for signing...');
+        
+        // Call backend to sign the transaction
+        const signResult = await actor.sign_transaction_stellar(
+          userAddress,
+          transactionXDR,
+          networkType
+        );
+        
+        onProgress?.(80);
+        
+        if ('Ok' in signResult) {
+          console.log('✅ Transaction signed successfully');
+          
+          onProgress?.(90);
+          console.log('📤 Submitting signed transaction to Stellar network...');
+          
+          // Submit the signed transaction
+          const submitResult = await actor.submit_transaction(signResult.Ok, networkType);
+          
+          if ('Ok' in submitResult) {
+            const submissionResponse = JSON.parse(submitResult.Ok);
+            console.log('✅ Transaction submitted successfully:', submissionResponse);
+            
+            onProgress?.(100);
+            
+            // Return complete success result
+            return {
+              success: true,
+              hash: submissionResponse.hash || `stellar_tx_${Date.now()}`,
+              message: "Stellar bridge transaction completed successfully",
+              explorer_url: `https://stellar.expert/explorer/${networkType}/tx/${submissionResponse.hash || 'demo'}`,
+              transactionXDR: transactionXDR,
+              signedTransactionXDR: signResult.Ok,
+              contractDetails: {
+                contractId: BRIDGE_CONTRACT,
+                sourceAddress: CANISTER_ADDRESS,
+                userAddress: userAddress,
+                sequenceNumber: accountData.sequence,
+                network: networkType,
+                fee: '10000000' // 0.01 XLM in stroops
+              },
+              bridgeDetails: {
+                fromChain: 'Stellar',
+                toChain: getInternalChainName(destChain),
+                amount: amount.toString(),
+                amountStroops: amountStroops,
+                token: destToken,
+                recipient: recipientAddress,
+                contractExecution: true
+              },
+              networkConfig: {
+                network: networkType,
+                networkPassphrase: networkPassphrase,
+                rpcUrl: 'https://soroban-testnet.stellar.org:443' // Always testnet
+              }
+            };
+          } else {
+            throw new Error(`Transaction submission failed: ${submitResult.Err}`);
+          }
+        } else {
+          throw new Error(`Transaction signing failed: ${signResult.Err}`);
+        }
+      } catch (error) {
+        console.error('❌ Backend signing/submission error:', error);
+        throw new Error(`Transaction signing/submission failed: ${error.message || error}`);
+      }
+    } else {
+      // No backend actor - return transaction data for external handling
+      console.warn('⚠️ No backend actor available - returning transaction data');
+      
+      return {
+        success: false,
+        needsExternalSigning: true,
+        message: "Transaction built but requires external signing",
+        transactionXDR: transactionXDR,
+        contractDetails: {
+          contractId: BRIDGE_CONTRACT,
+          sourceAddress: CANISTER_ADDRESS,
+          userAddress: userAddress,
+          sequenceNumber: accountData.sequence,
+          network: networkType
+        },
+        bridgeDetails: {
+          fromChain: 'Stellar',
+          toChain: getInternalChainName(destChain),
+          amount: amount.toString(),
+          token: destToken,
+          recipient: recipientAddress
+        },
+        instructions: "Use this XDR with your signing backend to complete the transaction"
+      };
+    }
+
   } catch (error) {
-    console.error('❌ Failed to build Stellar transaction:', error);
-    throw new Error(`Failed to build transaction: ${error.message}`);
+    console.error('❌ Complete bridge transaction failed:', error);
+    return {
+      success: false,
+      error: error.message,
+      errorType: error.constructor.name,
+      details: {
+        params: params,
+        config: config,
+        contractAddress: BRIDGE_CONTRACT,
+        sourceAddress: CANISTER_ADDRESS
+      }
+    };
   }
 };
+
 
 // Build lock transaction for Soroban contract (legacy function)
 export const buildLockTransaction = async (params, config) => {
@@ -207,154 +419,36 @@ export const buildLockTransaction = async (params, config) => {
 
 // Execute bridge transaction (demo implementation with optional backend integration)
 export const executeBridgeTransaction = async (params, network, onProgress, actor) => {
+  console.log('🚀 Executing bridge transaction (complete flow)...');
+  
   // Validate parameters
-  const validationError = validateBridgeParams(params);
-  if (validationError) {
-    throw new Error(validationError);
+  if (!params.userAddress) {
+    throw new Error('userAddress is required');
   }
-  
-  const config = getBridgeConfig(network);
-  onProgress?.(10);
-  
-  console.log('🔒 Starting bridge execution...');
-  console.log('📊 Bridge parameters:', params);
-  console.log('⚙️ Network config:', config);
-  
-  // Build the transaction
-  onProgress?.(25);
-  const { contractCall } = await buildLockTransaction(params, config);
-  console.log('📝 Contract call built:', contractCall);
-  
-  // Build the transaction on frontend using Stellar SDK
-  try {
-    onProgress?.(30);
-    console.log('🔍 Fetching account data from Stellar...');
-    
-    // Get account data (sequence number, etc.)
-    const accountData = await getAccountData(params.userAddress, config.network);
-    
-    onProgress?.(40);
-    console.log('🔨 Building Soroban contract transaction...');
-    
-    // Build the actual Stellar transaction using Stellar SDK
-    const { transactionXDR, contractCall, networkConfig } = await buildStellarTransaction(params, config, accountData);
-    
-    console.log('✅ Transaction built on frontend:', {
-      contractId: contractCall.contractId,
-      method: contractCall.method,
-      xdrLength: transactionXDR.length
-    });
-    
-    // If backend actor is available, use it for signing and submission
-    if (actor) {
-      try {
-        onProgress?.(60);
-        console.log('📞 Sending transaction to backend for signing...');
-        
-        // Call a simpler backend function that just signs and submits the XDR
-        
-        const signResult = await actor.sign_transaction_stellar(
-          params.userAddress,
-          transactionXDR,
-          network
-        );
-        
-        onProgress?.(80);
-        
-        if ('Ok' in signResult) {
-          console.log('✅ Transaction signed successfully');
-          
-          onProgress?.(90);
-          console.log('📤 Submitting signed transaction to Stellar network...');
-          
-          // Submit the signed transaction
-          const submitResult = await actor.submit_transaction(signResult.Ok, network);
-          
-          if ('Ok' in submitResult) {
-            const submissionResponse = JSON.parse(submitResult.Ok);
-            console.log('✅ Transaction submitted successfully:', submissionResponse);
-            
-            onProgress?.(100);
-            
-            const result = {
-              success: true,
-              hash: submissionResponse.hash || `stellar_tx_${Date.now()}`,
-              message: "Soroban lock contract executed successfully",
-              explorer_url: `https://stellar.expert/explorer/${config.network}/tx/${submissionResponse.hash || 'demo'}`,
-              contractDetails: {
-                contractId: contractCall.contractId,
-                sequenceNumber: accountData.sequence,
-                network: networkConfig.network,
-                userAddress: params.userAddress,
-                transactionXDR: transactionXDR
-              },
-              bridgeDetails: {
-                fromChain: 'Stellar',
-                toChain: getChainName(params.destChain),
-                amount: params.amount.toString(),
-                token: params.destToken,
-                recipient: params.recipientAddress,
-                contractExecution: true
-              }
-            };
-            
-            console.log('✅ Frontend-built Soroban bridge completed:', result);
-            return result;
-          } else {
-            throw new Error(`Transaction submission failed: ${submitResult.Err}`);
-          }
-        } else {
-          throw new Error(`Transaction signing failed: ${signResult.Err}`);
-        }
-      } catch (error) {
-        console.error('❌ Backend signing/submission error:', error);
-        throw new Error(`Transaction signing/submission failed: ${error.message || error}`);
-      }
-    } else {
-      // No backend actor available - return transaction for manual handling
-      console.warn('⚠️ No backend actor available for signing');
-      throw new Error('Backend not available for transaction signing');
-    }
-  } catch (error) {
-    console.error('❌ Frontend transaction building error:', error);
-    throw new Error(`Transaction building failed: ${error.message || error}`);
+  if (!params.recipientAddress) {
+    throw new Error('recipientAddress is required');
   }
-  
-  // Fallback to simulation (only used when no actor is available)
-  onProgress?.(50);
-  console.log('🔄 No backend actor available, using simulation mode for bridge transaction');
-  console.warn('⚠️ This is simulation only - no actual contract execution will occur');
-  
-  // Simulate network delay and processing
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  onProgress?.(75);
-  
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  onProgress?.(90);
-  
-  // Generate mock transaction hash
-  const timestamp = Date.now();
-  const randomSuffix = Math.random().toString(36).substr(2, 9);
-  const mockHash = `lock_${timestamp}_${randomSuffix}`;
-  
-  onProgress?.(100);
-  
-  const result = {
-    success: true,
-    hash: mockHash,
-    message: "Bridge transaction completed successfully",
-    explorer_url: `https://stellar.expert/explorer/${config.network}/tx/${mockHash}`,
-    bridgeDetails: {
-      fromChain: 'Stellar',
-      toChain: getChainName(params.destChain),
-      amount: params.amount.toString(),
-      token: params.destToken,
-      recipient: params.recipientAddress
-    }
+  if (!params.amount || params.amount <= 0) {
+    throw new Error('amount must be greater than 0');
+  }
+
+  const config = {
+    network: 'testnet', // Always testnet
+    contractId: BRIDGE_CONTRACT,
+    canisterAddress: CANISTER_ADDRESS,
+    rpcUrl: 'https://soroban-testnet.stellar.org:443' // Always testnet
   };
+
+  // Call the main function that does everything
+  const result = await buildStellarTransaction(params, config, actor, onProgress);
   
-  console.log('✅ Bridge completed:', result);
-  return result;
+  if (result.success) {
+    console.log('✅ Bridge transaction executed successfully:', result.hash);
+    return result;
+  } else {
+    console.error('❌ Bridge transaction failed:', result.error);
+    throw new Error(result.error || 'Bridge transaction failed');
+  }
 };
 
 // Estimate bridge fees (demo implementation)

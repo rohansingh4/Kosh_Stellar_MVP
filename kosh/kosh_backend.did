@@ -17,19 +17,17 @@ type TransformArgs = record { context : blob; response : HttpResponse };
 service : {
   build_stellar_transaction : (text, nat64, opt text) -> (Result);
   check_trustline : (text, text, opt text) -> (Result);
-  create_trustline : (text, text, opt text, opt text) -> (Result);
   evm_block_fetch : (nat64) -> ();
+  execute_bridge_lock : (text, text, nat64, text, text, opt text) -> (Result);
   execute_token_swap : (text, text, text, nat64, text, opt text) -> (Result);
   fetch_stellar_events : (nat32) -> (Result);
   generate_key_pair_evm : () -> (Result);
   get_account_assets : (opt text) -> (Result);
-  get_account_balance : (opt text) -> (Result);
   get_event_by_id : (text) -> (opt CandidContractEvent) query;
   get_events : () -> (vec CandidContractEvent) query;
-  get_swap_quote : (text, text, text, opt text) -> (Result);
   greet : (text) -> (text) query;
   public_key_stellar : () -> (Result);
   start_periodic_fetch : (nat64) -> ();
+  stellar_user_lock_txn : (text, text) -> (Result);
   transform_http_response : (TransformArgs) -> (HttpResponse) query;
-  update_block_number : (nat64) -> (Result);
 }
