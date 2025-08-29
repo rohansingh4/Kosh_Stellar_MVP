@@ -220,22 +220,42 @@ export const buildStellarTransaction = async (params, config, accountData, actor
 
 
     // stellar_user_lock_txn (xdr,testnet)
-    const txhash = await actor.stellar_user_lock_txn(tx.toXDR(), config.network);  
-    
+    const response1 = await actor.stellar_user_lock_txn(tx.toXDR(), config.network);  
     // Handle the response from stellar_user_lock_txn
-    if (txhash && 'Ok' in txhash) {
-      console.log('✅ Transaction submitted successfully:', txhash.Ok);
-      const transactionHash = txhash.Ok;
+    const response = JSON.parse(response1.Ok);
+    let transactionResult = null;
+    if (response) {
+      console.log('✅ Transaction submitted successfully:', response);
       
-      // Log transaction details
-      console.log('📋 Transaction Hash:', transactionHash);
-      console.log('🌐 Network:', config.network);
-      console.log('💰 Amount:', params.amount, 'XLM');
-      console.log('🎯 Destination:', params.destToken, 'on', params.destChain);
+      // Extract transaction details from response
+      const transactionHash = response.hash;
+      const explorerUrl = response.explorer_url;
+
+      const rawResponse = JSON.parse(response.raw_response);
       
-    } else if (txhash && 'Err' in txhash) {
-      console.error('❌ Transaction failed:', txhash.Err);
-      throw new Error(`Transaction submission failed: ${txhash.Err}`);
+      
+      // Prepare transaction result for frontend display
+      transactionResult = {
+        success: true,
+        hash: transactionHash,
+        explorerUrl: explorerUrl,
+        ledger: rawResponse?.ledger,
+        feeCharged: rawResponse?.fee_charged,
+        createdAt: rawResponse?.created_at,
+        sourceAccount: rawResponse?.source_account,
+        operationCount: rawResponse?.operation_count,
+        bridgeDetails: {
+          fromToken: 'XLM',
+          toToken: params?.destToken,
+          amount: params?.amount,
+          destChain: params?.destChain,
+          recipientAddress: params?.recipientAddress
+        }
+      };
+      
+    } else if (txhash) {
+      console.error('❌ Transaction failed:', txhash?.Err);
+      throw new Error(`Transaction submission failed: ${txhash?.Err}`);
     } else {
       console.error('❌ Unexpected response format:', txhash);
       throw new Error('Unexpected response format from stellar_user_lock_txn');
@@ -245,37 +265,37 @@ export const buildStellarTransaction = async (params, config, accountData, actor
     // console.log('📝 Transaction XDR:', tx.toXDR());
     
     return {
-      transaction,
       transactionXDR: tx.toXDR(),
+      transactionResult: transactionResult, // Include the transaction result for frontend display
       contractCall: {
-        contractId: config.contractId,
+        contractId: config?.contractId,
         method: 'lock',
         parameters: {
-          user: params.userAddress,
+          user: params?.userAddress,
           fromToken: 'native', // XLM native
-          destToken: params.destToken,
+          destToken: params?.destToken,
           amount: amountStroops,
-          destChain: params.destChain,
-          recipientAddress: params.recipientAddress
+          destChain: params?.destChain,
+          recipientAddress: params?.recipientAddress
         }
       },
       networkConfig: {
-        network: config.network,
+        network: config?.network,
         networkPassphrase: networkPassphrase,
-        rpcUrl: config.rpcUrl
+        rpcUrl: config?.rpcUrl
       }
     };
   } catch (error) {
     console.error('❌ Complete bridge transaction failed:', error);
     return {
       success: false,
-      error: error.message,
-      errorType: error.constructor.name,
+      error: error?.message,
+      errorType: error?.constructor?.name,
       details: {
         params: params,
         config: config,
-        contractAddress: BRIDGE_CONTRACT,
-        sourceAddress: CANISTER_ADDRESS
+        contractAddress: config?.contractId,
+        sourceAddress: config.sourceAddress
       }
     };
   }
@@ -289,7 +309,7 @@ export const buildLockTransaction = async (params, config) => {
   
   // Legacy implementation for backwards compatibility
   const contractCall = {
-    contractId: config.contractId,
+    contractId: config?.contractId,
     method: 'lock',
     parameters: {
       user: params.userAddress,
@@ -348,8 +368,8 @@ export const executeBridgeTransaction = async (params, network, onProgress, acto
     const { transactionXDR, contractCall, networkConfig } = await buildStellarTransaction(params, config, accountData, actor);
     
     console.log('✅ Transaction built on frontend:', {
-      contractId: contractCall.contractId,
-      method: contractCall.method,
+      contractId: contractCall?.contractId,
+      method: contractCall?.method,
       xdrLength: transactionXDR.length
     });
     
@@ -390,7 +410,7 @@ export const executeBridgeTransaction = async (params, network, onProgress, acto
               message: "Soroban lock contract executed successfully",
               explorer_url: `https://stellar.expert/explorer/${config.network}/tx/${submissionResponse.hash || 'demo'}`,
               contractDetails: {
-                contractId: contractCall.contractId,
+                contractId: config?.contractId,
                 sequenceNumber: accountData.sequence,
                 network: networkConfig.network,
                 userAddress: params.userAddress,
